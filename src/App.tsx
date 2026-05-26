@@ -114,8 +114,46 @@ export default function App() {
     'dashboard' | 'students' | 'tuition' | 'announcements' | 'audit' | 'config'
   >('dashboard');
 
-  // Multi-user & Login state simulator
-  const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]); // Starts as Tran Minh Duc (SUPER_ADMIN)
+  // Accounts list state with Local Storage persistence
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('vxq_users');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error hydrating vxq_users', e);
+      }
+    }
+    return MOCK_USERS;
+  });
+
+  // Multi-user & Login state simulator with Credentials Persistence
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('vxq_remembered_auth') !== null;
+  });
+
+  const [currentUser, setCurrentUser] = useState<User>(() => {
+    const saved = localStorage.getItem('vxq_remembered_auth');
+    const savedUsersStr = localStorage.getItem('vxq_users');
+    const list: User[] = savedUsersStr ? JSON.parse(savedUsersStr) : MOCK_USERS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const match = list.find(u => u.username === parsed.username);
+        if (match && parsed.password === parsed.username && match.isActive) {
+          return match;
+        }
+      } catch (e) {
+        console.error('Error parsing stored login credentials', e);
+      }
+    }
+    return list.find(u => u.username === 'viewer') || list[3] || MOCK_USERS[3]; // Fallback to 'viewer' by default if not logged in
+  });
+
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const [loginError, setLoginError] = useState('');
 
   // Calendar Period (Accounting month and year)
   const [currentMonth, setCurrentMonth] = useState<number>(5); // May
@@ -135,7 +173,7 @@ export default function App() {
   const [searchClass, setSearchClass] = useState('');
   const [searchStudent, setSearchStudent] = useState('');
   const [dashboardSearch, setDashboardSearch] = useState('');
-  const [monthsBefore, setMonthsBefore] = useState<number>(3);
+  const [monthsBefore, setMonthsBefore] = useState<number>(2);
   const [monthsAfter, setMonthsAfter] = useState<number>(2);
   const [statusFilterStudent, setStatusFilterStudent] = useState<string>('Active');
   const [classFilterStudent, setClassFilterStudent] = useState<string>('ALL');
@@ -237,6 +275,63 @@ export default function App() {
   // Sync helpers to keep local storage up to scratch
   const updateLocalStorage = (key: string, data: any) => {
     localStorage.setItem(key, JSON.stringify(data));
+  };
+
+  // Redirect protection for unauthorized or non-admin users
+  useEffect(() => {
+    if (!isLoggedIn) {
+      if (activeTab !== 'dashboard' && activeTab !== 'announcements') {
+        setActiveTab('dashboard');
+      }
+    } else {
+      const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
+      if (!isAdmin && (activeTab === 'config' || activeTab === 'audit')) {
+        setActiveTab('dashboard');
+      }
+    }
+  }, [isLoggedIn, activeTab, currentUser]);
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    const matchedUser = users.find(u => u.username === loginUsername.trim().toLowerCase());
+    
+    if (matchedUser && loginPassword === matchedUser.username) {
+      if (!matchedUser.isActive) {
+        setLoginError('Tài khoản này hiện đang bị khóa!');
+        return;
+      }
+      setCurrentUser(matchedUser);
+      setIsLoggedIn(true);
+      
+      if (rememberMe) {
+        localStorage.setItem('vxq_remembered_auth', JSON.stringify({
+          username: matchedUser.username,
+          password: loginPassword,
+        }));
+      } else {
+        localStorage.removeItem('vxq_remembered_auth');
+      }
+      
+      appendAuditLog('AUTH', matchedUser.username, 'LOGIN', '', `Đăng nhập thành công thành ${matchedUser.fullName}`);
+    } else {
+      setLoginError('Vui lòng kiểm tra lại tài khoản và mật khẩu!');
+    }
+  };
+
+  const handleLogout = () => {
+    const prevUsername = currentUser.username;
+    const prevFullName = currentUser.fullName;
+    
+    setIsLoggedIn(false);
+    const viewerFallback = users.find(u => u.username === 'viewer') || MOCK_USERS[3];
+    setCurrentUser(viewerFallback); // reset to viewer fallback
+    setLoginUsername('');
+    setLoginPassword('');
+    localStorage.removeItem('vxq_remembered_auth');
+    setActiveTab('dashboard');
+    
+    appendAuditLog('AUTH', prevUsername, 'LOGOUT', `Cựu: ${prevFullName}`, 'Đăng xuất thành công ra khỏi hệ thống');
   };
 
   // Helper: Log audit trail to the system
@@ -745,11 +840,26 @@ export default function App() {
   };
 
   const handleSwitchUser = (uname: string) => {
-    const match = MOCK_USERS.find(u => u.username === uname);
+    const match = users.find(u => u.username === uname);
     if (match) {
       const prevName = currentUser.fullName;
       setCurrentUser(match);
       appendAuditLog('AUTH', match.username, 'LOGIN', `Cựu: ${prevName}`, `Thay đổi phiên chuyển đổi nội bộ thành ${match.fullName}`);
+    }
+  };
+
+  const handleUpdateUsers = (updatedUsers: User[]) => {
+    setUsers(updatedUsers);
+    localStorage.setItem('vxq_users', JSON.stringify(updatedUsers));
+    
+    // Auto-sync or log out if the current logged-in user changes
+    const updatedSelf = updatedUsers.find(u => u.username === currentUser.username);
+    if (updatedSelf) {
+      if (!updatedSelf.isActive) {
+        handleLogout();
+      } else {
+        setCurrentUser(updatedSelf);
+      }
     }
   };
 
@@ -832,7 +942,7 @@ export default function App() {
           <span className="p-1 rounded-lg bg-emerald-600 text-white">
             <Building className="h-4.5 w-4.5" />
           </span>
-          <span className="font-bold text-xs tracking-tight text-emerald-950 uppercase">{config.receiptPrefix} Portal</span>
+          <span className="font-bold text-xs tracking-tight text-emerald-950 uppercase">VXQ_PORTAL</span>
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -863,11 +973,15 @@ export default function App() {
         <nav className="flex-1 px-4 py-4 space-y-1 block">
           {[
             { id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard },
-            { id: 'tuition', label: 'Quản Lý Học Phí', icon: CreditCard },
-            { id: 'students', label: 'Hồ Sơ Học Viên', icon: Users },
+            ...(isLoggedIn ? [
+              { id: 'tuition', label: 'Quản Lý Học Phí', icon: CreditCard },
+              { id: 'students', label: 'DS Võ Sinh', icon: Users }
+            ] : []),
             { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone },
-            { id: 'config', label: 'Cấu Hình', icon: Settings },
-            { id: 'audit', label: 'Lịch sử', icon: History }
+            ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
+              { id: 'config', label: 'Cấu Hình', icon: Settings },
+              { id: 'audit', label: 'Lịch sử', icon: History }
+            ] : [])
           ].map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -952,17 +1066,77 @@ export default function App() {
           </div>
 
           {/* Quick Active user selection & Signout indicator */}
-          <div className="flex items-center gap-3.5 self-end sm:self-auto">
-            {/* User credentials fast indicator switcher */}
-            <div className="flex items-center gap-1 border border-emerald-100 bg-white rounded-lg p-1 shadow-2xs">
-              <span className="p-1 rounded bg-emerald-50 text-emerald-700">
-                <UserCheck className="h-3.5 w-3.5" />
-              </span>
-              <div className="text-left px-1.5 py-0.5">
-                <p className="text-[11px] font-extrabold text-emerald-950 leading-3">{currentUser.fullName}</p>
-                <span className="text-[9px] text-[#059669] font-bold font-mono uppercase">{currentUser.role === 'SUPER_ADMIN' ? 'Ban Giám Sát' : currentUser.role === 'ADMIN' ? 'Quản Trị Viên' : currentUser.role === 'STAFF' ? 'Nhân Viên' : 'Người Xem'}</span>
+          <div className="flex items-center gap-3.5 self-end sm:self-auto select-none no-print">
+            {isLoggedIn ? (
+              <div className="flex items-center gap-3">
+                {/* User credentials fast indicator switcher */}
+                <div className="flex items-center gap-1 border border-emerald-100 bg-white rounded-lg p-1 shadow-2xs">
+                  <span className="p-1 rounded bg-emerald-50 text-emerald-700">
+                    <UserCheck className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="text-left px-1.5 py-0.5">
+                    <p className="text-[11px] font-extrabold text-emerald-950 leading-3">{currentUser.fullName}</p>
+                    <span className="text-[9px] text-[#059669] font-bold font-mono uppercase">
+                      {currentUser.role === 'SUPER_ADMIN' ? 'Ban Giám Sát' : currentUser.role === 'ADMIN' ? 'Quản Trị Viên' : currentUser.role === 'STAFF' ? 'Nhân Viên' : 'Người Xem'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs shadow-3xs hover:shadow-2xs transition-all cursor-pointer"
+                  title="Đăng xuất khỏi hệ thống"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Đăng xuất</span>
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col items-end gap-1">
+                <form onSubmit={handleLoginSubmit} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Tài khoản"
+                    value={loginUsername}
+                    onChange={(e) => { setLoginUsername(e.target.value); setLoginError(''); }}
+                    required
+                    className="w-24 sm:w-28 bg-gray-50 border border-emerald-100/70 p-1 py-1 text-xs rounded-lg font-bold text-emerald-950 focus:outline-none focus:border-emerald-500 placeholder:text-gray-400 placeholder:font-normal"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Mật khẩu"
+                    value={loginPassword}
+                    onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
+                    required
+                    className="w-24 sm:w-28 bg-gray-50 border border-emerald-100/70 p-1 py-1 text-xs rounded-lg font-bold text-emerald-950 focus:outline-none focus:border-emerald-500 placeholder:text-gray-400 placeholder:font-normal"
+                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="h-3 w-3 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 animate-none cursor-pointer"
+                    />
+                    <label htmlFor="rememberMe" className="text-[10px] text-gray-500 font-bold whitespace-nowrap cursor-pointer">
+                      Ghi nhớ
+                    </label>
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1 rounded-lg border border-emerald-600 shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                  >
+                    Đăng nhập
+                  </button>
+                </form>
+                {loginError ? (
+                  <span className="text-[10px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded leading-none">{loginError}</span>
+                ) : (
+                  <span className="text-[8.5px] text-emerald-700/80 font-bold leading-none mr-2">
+                    💡 Thử đăng nhập: <strong className="font-extrabold underline text-emerald-900">staff</strong> / <strong className="font-extrabold underline text-emerald-900">admin</strong> / <strong className="font-extrabold underline text-emerald-900">superadmin</strong> (Mật khẩu giống tài khoản)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
@@ -1005,38 +1179,54 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Stat Total Collected in CURRENT month */}
-                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Học phí thu tháng {currentMonth}</p>
-                        <h3 className="text-2xl font-black text-emerald-700 mt-1">{formatVND(currentCollectedAmountSum)}</h3>
-                        <p className="text-[10.5px] text-emerald-600 font-bold mt-1">Đã hoàn tất: {paidCurrentCount} võ sinh</p>
-                      </div>
-                      <div className="h-12 w-12 rounded-full bg-[#f0fdf4] text-emerald-600 flex items-center justify-center shrink-0">
-                        <CheckCircle className="h-5 w-5" />
-                      </div>
-                    </div>
+                    {isLoggedIn ? (
+                      <>
+                        {/* Stat Total Collected in CURRENT month */}
+                        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Học phí thu tháng {currentMonth}</p>
+                            <h3 className="text-2xl font-black text-emerald-950 mt-1">{formatVND(currentCollectedAmountSum)}</h3>
+                            <p className="text-[10.5px] text-emerald-600 font-bold mt-1">Đã hoàn tất: {paidCurrentCount} võ sinh</p>
+                          </div>
+                          <div className="h-12 w-12 rounded-full bg-[#f0fdf4] text-emerald-600 flex items-center justify-center shrink-0">
+                            <CheckCircle className="h-5 w-5" />
+                          </div>
+                        </div>
 
-                    {/* Stat Outstanding Unpaid */}
-                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Chờ thu tháng {currentMonth}</p>
-                        <h3 className="text-2xl font-black text-rose-700 mt-1">{formatVND(currentUnpaidAmountSum)}</h3>
-                        <p className="text-[10.5px] text-rose-600 font-bold mt-1">Còn lại: {unpaidCurrentCount} võ sinh</p>
+                        {/* Stat Outstanding Unpaid */}
+                        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Chờ thu tháng {currentMonth}</p>
+                            <h3 className="text-2xl font-black text-rose-700 mt-1">{formatVND(currentUnpaidAmountSum)}</h3>
+                            <p className="text-[10.5px] text-rose-600 font-bold mt-1">Còn lại: {unpaidCurrentCount} võ sinh</p>
+                          </div>
+                          <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
+                            <XCircle className="h-5 w-5" />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-1 sm:col-span-2 bg-gradient-to-r from-emerald-50 to-emerald-100/30 rounded-xl border border-[#d1fae5] p-5 shadow-2xs flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-widest font-sans">🔒 BÁO CÁO TÀI CHÍNH BẢO MẬT</p>
+                          <h3 className="text-sm font-extrabold text-emerald-950 mt-1">Doanh Thu & Công Nợ</h3>
+                          <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">Vui lòng đăng nhập hệ thống ở góc trên bên phải để mở khóa báo cáo chi tiết.</p>
+                        </div>
+                        <div className="h-10 w-10 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center shrink-0">
+                          <Lock className="h-4.5 w-4.5" />
+                        </div>
                       </div>
-                      <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
-                        <XCircle className="h-5 w-5" />
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Multi-month Advanced Tuition Status Matrix Block */}
-                  <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs space-y-4 font-sans">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100 pb-4">
-                      <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
-                          📋 BÁO CÁO THU HỌC PHÍ ĐA THÁNG
-                        </h4>
+                  {isLoggedIn ? (
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs space-y-4 font-sans">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100 pb-4">
+                        <div className="space-y-0.5">
+                          <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                            📋 BÁO CÁO HỌC PHÍ
+                          </h4>
                         <p className="text-[11px] text-gray-400">
                           Ma trận giám sát lịch sử đóng học phí mở rộng giúp dễ dàng đối chiếu đóng học kỳ trước và kế tiếp.
                         </p>
@@ -1054,7 +1244,7 @@ export default function App() {
                             <option value="0">0 tháng</option>
                             <option value="1">1 tháng trước</option>
                             <option value="2">2 tháng trước</option>
-                            <option value="3">3 tháng trước (Mặc định)</option>
+                            <option value="3">3 tháng trước</option>
                             <option value="4">4 tháng trước</option>
                             <option value="5">5 tháng trước</option>
                             <option value="6">6 tháng trước</option>
@@ -1070,7 +1260,7 @@ export default function App() {
                           >
                             <option value="0">0 tháng</option>
                             <option value="1">1 tháng sau</option>
-                            <option value="2">2 tháng sau (Mặc định)</option>
+                            <option value="2">2 tháng sau</option>
                             <option value="3">3 tháng sau</option>
                             <option value="4">4 tháng sau</option>
                             <option value="5">5 tháng sau</option>
@@ -1110,8 +1300,8 @@ export default function App() {
                                       key={`${item.month}-${item.year}`} 
                                       className={`px-2 py-3 text-center border-r border-gray-100 ${isCurrent ? 'bg-[#d1fae5] border-l-2 border-r-2 border-[#10b981] text-emerald-950 font-black' : 'font-semibold'}`}
                                     >
-                                      Tháng {item.month}/{item.year}
-                                      {isCurrent && <span className="block text-[8px] text-emerald-800 font-normal normal-case">Kỳ này</span>}
+                                      T.{item.month}/{item.year}
+                                      {isCurrent && <span className="block text-[8px] text-[#065f46] font-normal normal-case animate-none">Kỳ này</span>}
                                     </th>
                                   );
                                 })}
@@ -1155,8 +1345,37 @@ export default function App() {
                                       {computedRange.map(item => {
                                         const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                         const isCellPaid = cellPay?.paidStatus === 'Paid';
-                                         const isCellExempt = cellPay?.paidStatus === 'Exempted';
+                                        const isCellExempt = cellPay?.paidStatus === 'Exempted';
                                         const isCurrent = item.month === currentMonth && item.year === currentYear;
+
+                                        // Check if student joined yet based on enrollmentDate ("YYYY-MM-DD")
+                                        let hasJoined = true;
+                                        if (st.enrollmentDate) {
+                                          const parts = st.enrollmentDate.split('-');
+                                          if (parts.length >= 2) {
+                                            const enrollYear = parseInt(parts[0], 10);
+                                            const enrollMonth = parseInt(parts[1], 10);
+                                            if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
+                                              if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
+                                                hasJoined = false;
+                                              }
+                                            }
+                                          }
+                                        }
+
+                                        if (!hasJoined) {
+                                          return (
+                                            <td 
+                                              key={`${st.studentId}-${item.month}-${item.year}`}
+                                              className={`px-2 py-3.5 text-center border-r border-gray-100 bg-[#f9fafb]/60 select-none text-gray-400 ${isCurrent ? 'bg-gray-100/30' : ''}`}
+                                            >
+                                              <div className="inline-flex flex-col items-center justify-center p-1 bg-gray-100/60 border border-gray-200/50 text-gray-400 rounded min-w-[80px] w-full text-center">
+                                                <span className="text-[10px] font-bold text-gray-400/80">Trống</span>
+                                                <span className="text-[8px] text-gray-450 font-bold mt-0.5">Chưa tham gia</span>
+                                              </div>
+                                            </td>
+                                          );
+                                        }
 
                                         return (
                                           <td 
@@ -1219,6 +1438,22 @@ export default function App() {
                       })()}
                     </div>
                   </div>
+                ) : (
+                    <div className="bg-white rounded-xl border border-[#d1fae5]/70 p-8 shadow-3xs text-center space-y-4 max-w-lg mx-auto">
+                      <div className="mx-auto w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100">
+                        <LockKeyhole className="h-7 w-7 text-emerald-650 animate-pulse" />
+                      </div>
+                      <h3 className="text-emerald-950 font-extrabold text-sm uppercase tracking-wider">YÊU CẦU ĐĂNG NHẬP HỆ THỐNG</h3>
+                      <p className="text-xs text-emerald-800/80 leading-relaxed">
+                        Bạn chưa đăng nhập hoặc phiên đã hết hạn. Vui lòng điền thông tin tài khoản và mật khẩu ở bảng góc trên bên phải để mở khóa ma trận báo cáo học phí và chức năng quản lý.
+                      </p>
+                      <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100/50 max-w-sm mx-auto text-left">
+                        <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-emerald-800 block mb-1">💡 Thông tin tài khoản Demo:</span>
+                        <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">staff</span> (Mật khẩu: staff)</code>
+                        <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">admin</span> (Mật khẩu: admin)</code>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1231,8 +1466,8 @@ export default function App() {
                   {/* Header page student control */}
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h1 className="text-xl font-bold text-gray-900 tracking-tight">Hồ Sơ Danh Sách Học Viên</h1>
-                      <p className="text-xs text-gray-500 mt-1">Cập nhật hồ sơ sỹ số, thông tin cha mẹ, chiết khấu phần trăm ưu đãi và địa chỉ nhà học viên.</p>
+                      <h1 className="text-xl font-bold text-gray-900 tracking-tight">Danh Sách Võ Sinh</h1>
+                      <p className="text-xs text-gray-500 mt-1">Cập nhật sỹ số võ sinh, thông tin cha mẹ, chiết khấu phần trăm ưu đãi và địa chỉ nhà.</p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1251,7 +1486,7 @@ export default function App() {
                           }}
                           className="flex items-center gap-1 bg-emerald-600 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg hover:bg-emerald-700 transition cursor-pointer shadow-xs shadow-emerald-200"
                         >
-                          <Plus className="h-4 w-4" /> Ghi danh học viên
+                          <Plus className="h-4 w-4" /> Thêm Võ Sinh Mới
                         </button>
                       )}
                     </div>
@@ -1863,14 +2098,15 @@ export default function App() {
               {/* ==============================================================
                   MODULE 10 & 28: CONFIGURATION PAGE & INSTANT TEST USER SWAP
                   ============================================================== */}
-              {activeTab === 'config' && (
+               {activeTab === 'config' && (
                 <ConfigSettings
                   config={config}
-                  users={MOCK_USERS}
+                  users={users}
                   userRole={currentUser.role}
                   currentUser={currentUser.username}
                   onUpdateConfig={handleUpdateConfig}
                   onSwitchUser={handleSwitchUser}
+                  onUpdateUsers={handleUpdateUsers}
                 />
               )}
 

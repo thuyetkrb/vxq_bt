@@ -16,7 +16,7 @@ export const INITIAL_CONFIG: AppConfig = {
   centerName: 'Lớp Vịnh Xuân Bình Tân (Nam Anh Quang)',
   address: 'Khu Mua Sắm Anh Hào, 666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM',
   phone: '0938 372 286',
-  receiptPrefix: 'VX',
+  receiptPrefix: 'VXQ',
   logoUrl: '',
   defaultTuitionFee: 1500000, // 1,500,000 VND
   academicYear: 2026
