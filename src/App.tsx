@@ -147,6 +147,7 @@ export default function App() {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
+  const [isFreeExempt, setIsFreeExempt] = useState(false);
 
   // Active Receipt Modal visualization
   const [activeReceiptPayment, setActiveReceiptPayment] = useState<TuitionPayment | null>(null);
@@ -516,8 +517,13 @@ export default function App() {
     const oldBill = payments.find(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear);
     const oldSum = oldBill ? JSON.stringify(oldBill) : '';
 
-    const sequence = payments.filter(p => p.month === currentMonth && p.year === currentYear && p.paidStatus === 'Paid').length + 1;
-    const receiptGenerated = `${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`;
+    const finalStatus = isFreeExempt ? 'Exempted' as const : 'Paid' as const;
+    const finalAmt = isFreeExempt ? 0 : paidAmt;
+
+    const sequence = payments.filter(p => p.month === currentMonth && p.year === currentYear && p.paidStatus !== 'Unpaid').length + 1;
+    const receiptGenerated = isFreeExempt 
+      ? `EX-${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`
+      : `${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`;
 
     let updated;
     const existingIndex = payments.findIndex(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear);
@@ -526,8 +532,8 @@ export default function App() {
         if (p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear) {
           return {
             ...p,
-            amount: paidAmt,
-            paidStatus: 'Paid' as const,
+            amount: finalAmt,
+            paidStatus: finalStatus,
             paidDate: paidDateVal,
             collectedBy: collectorVal,
             receiptNo: receiptGenerated,
@@ -544,8 +550,8 @@ export default function App() {
         classId: matchStudent?.classId || 'CLASS-01',
         month: currentMonth,
         year: currentYear,
-        amount: paidAmt,
-        paidStatus: 'Paid' as const,
+        amount: finalAmt,
+        paidStatus: finalStatus,
         paidDate: paidDateVal,
         collectedBy: collectorVal,
         receiptNo: receiptGenerated,
@@ -564,7 +570,9 @@ export default function App() {
       payingStudentId || 'N/A', 
       'UPDATE', 
       oldSum, 
-      `Xác nhận đóng Học phí: ${formatVND(paidAmt)}, Phiếu: ${receiptGenerated}, Thu bởi: ${collectorVal}`
+      isFreeExempt
+        ? `Xác nhận Miễn học phí, Phiếu: ${receiptGenerated}, Lý do: ${noteVal}, Ghi bởi: ${collectorVal}`
+        : `Xác nhận đóng Học phí: ${formatVND(finalAmt)}, Phiếu: ${receiptGenerated}, Thu bởi: ${collectorVal}`
     );
 
     // Auto-trigger visual receipt display immediately
@@ -574,6 +582,7 @@ export default function App() {
 
     setIsPayModalOpen(false);
     setPayingStudentId(null);
+    setIsFreeExempt(false);
   };
 
   const handleMarkUnpaid = (pay: TuitionPayment) => {
@@ -832,7 +841,7 @@ export default function App() {
           </span>
           <div>
             <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">WINGCHUN BÌNH TÂN</span>
-            <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono leading-none block mt-1">Võ Đường Nam Anh Quang</span>
+            <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono leading-none block mt-1">Võ Quán Nam Anh Quang</span>
           </div>
         </div>
 
@@ -960,64 +969,12 @@ export default function App() {
                   ============================================================== */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
-                  {/* Wingchun Training Center Profile Header Banner */}
-                  <div className="bg-[#f0fdf4] border border-emerald-100 rounded-2xl p-6 shadow-xs relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-5 text-emerald-900 pointer-events-none hidden md:block">
-                      <GraduationCap className="h-32 w-32" />
-                    </div>
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                      <div className="space-y-2.5">
-                        <div className="inline-flex items-center gap-2 bg-emerald-100/70 border border-emerald-200 rounded-full px-3 py-1">
-                          <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                          <span className="text-[10.5px] font-extrabold text-[#115e59] uppercase tracking-wider font-mono">Thông Tin Võ Đường</span>
-                        </div>
-                        <h1 className="text-xl font-black text-emerald-950 tracking-tight leading-snug">
-                          🥋 LỚP VỊNH XUÂN BÌNH TÂN — VÕ ĐƯỜNG NAM ANH QUANG
-                        </h1>
-                        <p className="text-xs text-emerald-900/80 max-w-2xl leading-relaxed">
-                          Nhận võ sinh thường xuyên chiêu sinh mọi cấp độ. Chương trình huấn luyện Vịnh Xuân Quyền chuyên sâu giúp tăng cường thể chất, phản xạ tự vệ và rèn luyện đạo đức võ thuật.
-                        </p>
-                      </div>
-
-                      {/* Contact Info Card */}
-                      <div className="bg-white border border-emerald-50 rounded-xl p-4 shadow-3xs text-xs space-y-2 md:w-80 shrink-0">
-                        <h3 className="font-extrabold text-emerald-950 uppercase text-[10px] tracking-widest border-b border-gray-100 pb-1.5 flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-emerald-600" /> Sổ Hotline Liên Hệ
-                        </h3>
-                        <p className="font-bold text-gray-800">VS Nam Anh Quang: <a href="tel:0938372286" className="text-emerald-700 hover:underline">0938 372 286</a></p>
-                        <p className="text-[11px] text-gray-500 font-medium">Nhận học viên thường xuyên kể cả chưa có kinh nghiệm võ thuật.</p>
-                      </div>
-                    </div>
-
-                    {/* Meta quick-grid details */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-emerald-200/50 pt-5 mt-5 text-xs text-emerald-950 font-semibold">
-                      <div className="flex items-start gap-2.5">
-                        <CalendarDays className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">⏰ Lịch Tập Luyện</p>
-                          <p className="text-emerald-900 mt-0.5 font-bold">18:30 – 20:00</p>
-                          <p className="text-emerald-800 text-[10.5px]">Thứ 2 – 4 – 6 hàng tuần</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2.5">
-                        <Users className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">👨‍👩‍👧‍👦 Đối Tượng Tham Gia</p>
-                          <p className="text-emerald-900 mt-0.5 font-bold">Nam / Nữ từ 6 – 60 tuổi</p>
-                          <p className="text-emerald-800 text-[10.5px]">Không yêu cầu kinh nghiệm ban đầu</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2.5">
-                        <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">📍 Địa Chỉ Võ Đường</p>
-                          <p className="text-emerald-900 mt-0.5 font-bold">Khu Mua Sắm Anh Hào</p>
-                          <p className="text-emerald-800 text-[10.5px] leading-snug">666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM</p>
-                        </div>
-                      </div>
-                    </div>
+                  {/* Title and Top Description */}
+                  <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
+                    <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
+                    <p className="text-xs text-emerald-800/80 mt-1">
+                      Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
+                    </p>
                   </div>
 
                   {/* Top Simple Counters Grid */}
@@ -1184,6 +1141,7 @@ export default function App() {
                                       {computedRange.map(item => {
                                         const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                         const isCellPaid = cellPay?.paidStatus === 'Paid';
+                                         const isCellExempt = cellPay?.paidStatus === 'Exempted';
                                         const isCurrent = item.month === currentMonth && item.year === currentYear;
 
                                         return (
@@ -1191,7 +1149,7 @@ export default function App() {
                                             key={`${st.studentId}-${item.month}-${item.year}`}
                                             className={`px-2 py-3.5 text-center border-r border-gray-100 ${isCurrent ? 'bg-emerald-50/20 font-semibold' : ''}`}
                                           >
-                                            {isCellPaid ? (
+                                            {isCellExempt ? (<div className="inline-flex flex-col items-center justify-center p-1 bg-cyan-50 border border-cyan-200 text-cyan-800 rounded min-w-[80px] w-full text-center"><span className="text-[10px] font-bold flex items-center justify-center gap-0.5 text-cyan-700">✨ Miễn học phí</span>{cellPay?.note ? (<span className="text-[8.5px] font-bold text-cyan-600 mt-0.5 block truncate max-w-[80px] w-full" title={cellPay.note}>{cellPay.note}</span>) : (<span className="text-[8px] text-cyan-500 mt-0.5 italic block">Không cần đóng</span>)}<button onClick={() => { setReceiptStudent(st); setActiveReceiptPayment(cellPay); }} className="mt-1 text-[8.5px] text-cyan-800 hover:text-cyan-950 underline bg-transparent cursor-pointer font-bold block" title="Xem chi tiết miễn đóng">Chi Tiết</button></div>) : isCellPaid ? (
                                               <div className="inline-flex flex-col items-center justify-center p-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded min-w-[80px] w-full text-center">
                                                 <span className="text-[10px] font-bold flex items-center justify-center gap-0.5 text-emerald-700">
                                                   <Check className="h-3 w-3" /> Đã nộp
@@ -1640,13 +1598,18 @@ export default function App() {
                                         <p className="font-mono text-[10.5px] font-black text-gray-800 bg-[#eefaf2] px-1 border border-emerald-100 rounded w-fit">{pay.receiptNo}</p>
                                         <span className="text-[9px] text-gray-400 block pt-0.5">Ngày nộp: {pay.paidDate}</span>
                                       </div>
+                                    ) : pay.paidStatus === 'Exempted' ? (
+                                      <div>
+                                        <p className="font-mono text-[10.5px] font-bold text-cyan-800 bg-cyan-50 px-1 border border-cyan-100 rounded w-fit">{pay.receiptNo || 'EXEMPTED'}</p>
+                                        <p className="text-[10px] text-cyan-600 font-extrabold italic mt-0.5 animate-pulse" title={pay.note}>Lý do: {pay.note || 'Không cần nộp'}</p>
+                                      </div>
                                     ) : (
                                       <span className="text-gray-400 text-[10px] italic">Chờ xuất phiếu...</span>
                                     )}
                                   </td>
                                   <td className="px-4 py-3.5 select-none">
-                                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-extrabold ${pay.paidStatus === 'Paid' ? 'bg-[#e0ffd5] text-[#1c640e]' : 'bg-red-100 text-[#a31a1a] pulse-active'}`}>
-                                      {pay.paidStatus === 'Paid' ? 'ĐÃ ĐÓNG SỔ (Paid)' : 'CHƯA ĐÓNG'}
+                                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-extrabold ${pay.paidStatus === 'Paid' ? 'bg-[#e0ffd5] text-[#1c640e]' : pay.paidStatus === 'Exempted' ? 'bg-cyan-100 text-cyan-800' : 'bg-rose-100 text-rose-700 pulse-active'}`}>
+                                      {pay.paidStatus === 'Paid' ? 'ĐÃ ĐÓNG SỔ (Paid)' : pay.paidStatus === 'Exempted' ? 'MIỄN HỌC PHÍ (Exempted)' : 'CHƯA ĐÓNG'}
                                     </span>
                                   </td>
                                   <td className="px-4 py-3.5 text-right">
@@ -1671,6 +1634,29 @@ export default function App() {
                                               title="Hủy thanh toán / Reset"
                                             >
                                               Hủy Đóng
+                                            </button>
+                                          ) : null}
+                                        </>
+                                      ) : pay.paidStatus === 'Exempted' ? (
+                                        <>
+                                          <button
+                                            onClick={() => {
+                                              setReceiptStudent(stud || null);
+                                              setActiveReceiptPayment(pay);
+                                            }}
+                                            className="rounded font-bold bg-cyan-50 hover:bg-cyan-100/80 text-cyan-800 border-cyan-100 border text-[10px] px-2.5 py-1 cursor-pointer"
+                                            title="Xem lý do miễn nộp"
+                                          >
+                                            Chi Tiết Miễn Đóng
+                                          </button>
+                                          
+                                          {currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' ? (
+                                            <button
+                                              onClick={() => handleMarkUnpaid(pay)}
+                                              className="p-1 rounded bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-[10px] cursor-pointer"
+                                              title="Hủy trạng thái miễn đóng / Reset"
+                                            >
+                                              Hủy Miễn Đóng
                                             </button>
                                           ) : null}
                                         </>
@@ -1714,6 +1700,7 @@ export default function App() {
                           <button onClick={() => {
                             setIsPayModalOpen(false);
                             setPayingStudentId(null);
+                            setIsFreeExempt(false);
                           }} className="text-emerald-800 rounded-full p-1 hover:bg-emerald-100 font-bold">
                             <X className="h-4.5 w-4.5" />
                           </button>
@@ -1727,7 +1714,36 @@ export default function App() {
                               <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase">Võ sinh nộp học phí</label>
                                 <p className="text-xs font-bold text-gray-900">{stdMatch.fullName} ({stdMatch.nickname || 'Không biệt danh'})</p>
-                                <p className="text-[10px] text-gray-400 font-semibold">{clMatch?.className || 'Lớp ẩn'} • Học phí: {formatVND(stdMatch.tuitionFee)}</p>
+                                <p className="text-[10px] text-gray-400 font-semibold">{clMatch?.className || 'Lớp ẩn'} • Học phí gốc: {formatVND(stdMatch.tuitionFee)}</p>
+                              </div>
+
+                              {/* Lựa chọn Miễn Phí hoặc Đóng học phí */}
+                              <div className="space-y-1.5 p-2.5 rounded-lg border border-emerald-100 bg-emerald-50/20">
+                                <label className="text-[10px] font-bold text-emerald-800 uppercase block">Trạng thái hạch toán</label>
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="flex items-center gap-2 text-xs text-gray-700 font-bold cursor-pointer">
+                                    <input 
+                                      type="radio" 
+                                      name="paymentType" 
+                                      value="Paid"
+                                      checked={!isFreeExempt}
+                                      onChange={() => setIsFreeExempt(false)}
+                                      className="text-emerald-600 focus:ring-emerald-500" 
+                                    />
+                                    <span>Đóng học phí bình thường</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 text-xs text-rose-800 font-bold cursor-pointer">
+                                    <input 
+                                      type="radio" 
+                                      name="paymentType" 
+                                      value="Exempted"
+                                      checked={isFreeExempt}
+                                      onChange={() => setIsFreeExempt(true)}
+                                      className="text-rose-600 focus:ring-rose-500" 
+                                    />
+                                    <span>Miễn học phí / Không cần đóng</span>
+                                  </label>
+                                </div>
                               </div>
 
                               <div className="space-y-1">
@@ -1736,13 +1752,18 @@ export default function App() {
                                   type="number"
                                   name="paidAmount"
                                   required
-                                  defaultValue={stdMatch.tuitionFee}
-                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-extrabold text-emerald-900 focus:border-emerald-500 focus:outline-none"
+                                  value={isFreeExempt ? 0 : undefined}
+                                  defaultValue={isFreeExempt ? 0 : stdMatch.tuitionFee}
+                                  disabled={isFreeExempt}
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-extrabold text-emerald-900 focus:border-emerald-500 focus:outline-none disabled:opacity-75 disabled:bg-gray-100"
                                 />
+                                {isFreeExempt && (
+                                  <span className="text-[9px] text-emerald-700 font-bold block mt-1">✨ Miễn đóng học phí: Số tiền tự động điều chỉnh về 0đ</span>
+                                )}
                               </div>
 
                               <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày thu tiền nộp</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày hoàn thành thu nộp / ghi nhận</label>
                                 <input
                                   type="date"
                                   name="paidDate"
@@ -1753,11 +1774,14 @@ export default function App() {
                               </div>
 
                               <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-500 uppercase">Nội dung chi đóng / Sổ ghi biên lai</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">
+                                  {isFreeExempt ? 'LÝ DO MIỄN PHÍ / KHÔNG CẦN ĐÓNG (Bắt buộc)' : 'Nội dung chi đóng / Sổ ghi biên lai'}
+                                </label>
                                 <input
                                   type="text"
                                   name="note"
-                                  placeholder="Ví dụ: Chuyển khoản Techcombank VP"
+                                  required={isFreeExempt}
+                                  placeholder={isFreeExempt ? 'Ghi rõ lý do miễn học phí (Bắt buộc)...' : 'Ví dụ: Đóng tiền mặt tại VP, Chuyển khoản Techcombank'}
                                   className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
                                 />
                               </div>
@@ -1779,6 +1803,7 @@ export default function App() {
                                   onClick={() => {
                                     setIsPayModalOpen(false);
                                     setPayingStudentId(null);
+                                    setIsFreeExempt(false);
                                   }}
                                   className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
                                 >
@@ -1838,6 +1863,68 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </section>
+
+        {/* Persistent Võ Quán Profile Banner — Bên dưới trang web */}
+        <footer className="no-print px-5 md:px-6 pb-6 pt-2 select-none">
+          <div className="bg-[#f0fdf4] border border-emerald-100 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5 text-emerald-950 pointer-events-none hidden md:block">
+              <GraduationCap className="h-32 w-32" />
+            </div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+              <div className="space-y-2.5">
+                <div className="inline-flex items-center gap-2 bg-emerald-100/70 border border-emerald-200 rounded-full px-3 py-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <span className="text-[10.5px] font-extrabold text-[#115e59] uppercase tracking-wider font-mono">Thông Tin Võ Quán</span>
+                </div>
+                <h1 className="text-xl font-black text-emerald-950 tracking-tight leading-snug">
+                  🥋 LỚP VỊNH XUÂN BÌNH TÂN — VÕ QUÁN NAM ANH QUANG
+                </h1>
+                <p className="text-xs text-emerald-900/80 max-w-2xl leading-relaxed">
+                  Nhận học viên thường xuyên kể cả chưa có kinh nghiệm võ thuật chiêu sinh mọi cấp độ. Chương trình huấn luyện Vịnh Xuân Quyền chuyên sâu giúp tăng cường thể chất, phản xạ tự vệ và rèn luyện đạo đức võ thuật.
+                </p>
+              </div>
+
+              {/* Contact Info Card */}
+              <div className="bg-white border border-emerald-50 rounded-xl p-4 shadow-3xs text-xs space-y-2 md:w-80 shrink-0">
+                <h3 className="font-extrabold text-emerald-950 uppercase text-[10px] tracking-widest border-b border-gray-100 pb-1.5 flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-emerald-600" /> Sổ Hotline Liên Hệ
+                </h3>
+                <p className="font-bold text-gray-800">VS Nam Anh Quang: <a href="tel:0938372286" className="text-emerald-700 hover:underline">0938 372 286</a></p>
+                <p className="text-[11px] text-gray-500 font-medium">Nhận học viên thường xuyên kể cả chưa có kinh nghiệm võ thuật.</p>
+              </div>
+            </div>
+
+            {/* Meta quick-grid details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-emerald-200/50 pt-5 mt-5 text-xs text-emerald-950 font-semibold">
+              <div className="flex items-start gap-2.5">
+                <CalendarDays className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">⏰ Lịch Tập Luyện</p>
+                  <p className="text-emerald-900 mt-0.5 font-bold">18:30 – 20:00</p>
+                  <p className="text-emerald-800 text-[10.5px]">Thứ 2 – 4 – 6 hàng tuần</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <Users className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">👨‍👩‍👧‍👦 Đối Tượng Tham Gia</p>
+                  <p className="text-emerald-900 mt-0.5 font-bold">Nam / Nữ từ 6 – 60 tuổi</p>
+                  <p className="text-emerald-800 text-[10.5px]">Không yêu cầu kinh nghiệm ban đầu</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">📍 Địa Chỉ Võ Quán</p>
+                  <p className="text-emerald-900 mt-0.5 font-bold">Khu Mua Sắm Anh Hào</p>
+                  <p className="text-emerald-800 text-[10.5px] leading-snug">666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </footer>
       </main>
 
       {/* ----------------- GLOBAL EMBED RECEIPT EXPORT VISUALIZER ----------------- */}

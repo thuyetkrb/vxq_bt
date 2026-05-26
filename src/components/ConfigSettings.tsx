@@ -69,7 +69,7 @@ export default function ConfigSettings({
       academicYear: year
     });
 
-    setSuccess('Đã cập nhật cấu hình trung tâm thành công trên toàn hệ thống!');
+    setSuccess('Đã cập nhật cấu hình võ quán thành công trên toàn hệ thống!');
     setTimeout(() => setSuccess(''), 4000);
   };
 
@@ -106,7 +106,7 @@ export default function ConfigSettings({
           <form onSubmit={handleSaveConfig} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-500 uppercase">Tên Trung tâm giáo dục</label>
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Tên Võ quán / Lớp Võ</label>
                 <input
                   type="text"
                   required

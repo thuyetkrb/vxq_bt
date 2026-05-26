@@ -53,7 +53,7 @@ export interface TuitionPayment {
   month: number; // 1-12
   year: number;
   amount: number; // paid amount in VND
-  paidStatus: 'Paid' | 'Unpaid';
+  paidStatus: 'Paid' | 'Unpaid' | 'Exempted';
   paidDate?: string;
   collectedBy?: string;
   receiptNo: string;

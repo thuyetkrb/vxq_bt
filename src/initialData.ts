@@ -388,7 +388,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     announcementId: 'ANN-01',
     title: 'Thông báo nghỉ tập ngày Quốc tế Thiếu nhi 01/06',
-    content: 'Kính gửi quý phụ huynh và các em võ sinh, võ đường Vịnh Xuân Bình Tân xin thông báo nghỉ tập ngày Quốc tế Thiếu nhi 01/06/2026. Các em sẽ nghỉ tập vào thứ Hai và tập bù vào các buổi sau cùng huấn luyện viên phụ trách.',
+    content: 'Kính gửi quý phụ huynh và các em võ sinh, võ quán Vịnh Xuân Bình Tân xin thông báo nghỉ tập ngày Quốc tế Thiếu nhi 01/06/2026. Các em sẽ nghỉ tập vào thứ Hai và tập bù vào các buổi sau cùng huấn luyện viên phụ trách.',
     createdBy: 'Trần Minh Đức',
     createdAt: '2026-05-15T09:00:00Z',
     updatedAt: '2026-05-15T09:00:00Z',
@@ -397,7 +397,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     announcementId: 'ANN-02',
     title: 'Quy định đóng học phí và võ phục lớp Vịnh Xuân',
-    content: 'Để phục vụ công tác chuẩn bị mua sắm võ phục, trang thiết bị tập luyện tốt nhất, kính mong quý phụ huynh và võ sinh hoàn tất nghĩa vụ học phí trước ngày 05 hàng tháng. Võ sinh nộp đúng hạn sẽ được võ đường tặng thêm huy hiệu đặc biệt.',
+    content: 'Để phục vụ công tác chuẩn bị mua sắm võ phục, trang thiết bị tập luyện tốt nhất, kính mong quý phụ huynh và võ sinh hoàn tất nghĩa vụ học phí trước ngày 05 hàng tháng. Võ sinh nộp đúng hạn sẽ được võ quán tặng thêm huy hiệu đặc biệt.',
     createdBy: 'Nguyễn Thị Mai',
     createdAt: '2026-05-20T10:30:00Z',
     updatedAt: '2026-05-20T10:30:00Z',

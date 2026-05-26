@@ -230,7 +230,7 @@ export default function AnnouncementSection({
           <div className="rounded-xl border border-gray-100 bg-white p-12 text-center">
             <Megaphone className="h-8 w-8 text-emerald-400 mx-auto opacity-70" />
             <p className="text-sm text-gray-500 mt-3 font-medium">Bảng tin hệ thống trống rỗng.</p>
-            <p className="text-xs text-gray-400">Hãy thêm thông báo đầu tiên để ban truyền thông trung tâm hoạt động.</p>
+            <p className="text-xs text-gray-400">Hãy thêm thông báo đầu tiên để ban truyền thông võ quán hoạt động.</p>
           </div>
         ) : (
           sortedAnnouncements.map((ann) => (
