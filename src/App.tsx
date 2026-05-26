@@ -1,0 +1,1861 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  LayoutDashboard,
+  GraduationCap,
+  Users,
+  CreditCard,
+  CircleDollarSign,
+  Megaphone,
+  History,
+  Settings,
+  Menu,
+  X,
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  UserCheck,
+  Download,
+  Lock,
+  CalendarDays,
+  CheckCircle,
+  XCircle,
+  Check,
+  Printer,
+  AlertTriangle,
+  UserMinus,
+  FileSpreadsheet,
+  Building,
+  Edit,
+  NotebookTabs,
+  Trash2,
+  LockKeyhole,
+  Phone,
+  MapPin
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+import {
+  Class,
+  Student,
+  TuitionPayment,
+  TeacherTransfer,
+  Announcement,
+  AuditLog,
+  Baseline,
+  AppConfig,
+  User,
+  UserRole
+} from './types';
+
+import {
+  MOCK_USERS,
+  INITIAL_CONFIG,
+  INITIAL_CLASSES,
+  INITIAL_STUDENTS,
+  INITIAL_PAYMENTS,
+  INITIAL_TRANSFERS,
+  INITIAL_ANNOUNCEMENTS,
+  INITIAL_AUDIT_LOGS,
+  INITIAL_BASELINES
+} from './initialData';
+
+import { formatVND, exportToCSV, getMonthName, buildFilename } from './utils';
+
+const getMonthRange = (currentM: number, currentY: number, beforeCount: number, afterCount: number) => {
+  const range = [];
+  
+  // Calculate months before
+  for (let i = beforeCount; i >= 1; i--) {
+    let m = currentM - i;
+    let y = currentY;
+    while (m <= 0) {
+      m += 12;
+      y -= 1;
+    }
+    range.push({ month: m, year: y });
+  }
+  
+  // Current month
+  range.push({ month: currentM, year: currentY });
+  
+  // Calculate months after
+  for (let i = 1; i <= afterCount; i++) {
+    let m = currentM + i;
+    let y = currentY;
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+    range.push({ month: m, year: y });
+  }
+  
+  return range;
+};
+
+// Import our modular components
+import ReceiptModal from './components/ReceiptModal';
+import AuditLogsView from './components/AuditLogsView';
+import AnnouncementSection from './components/AnnouncementSection';
+import ConfigSettings from './components/ConfigSettings';
+
+export default function App() {
+  // Mobile Navigation Drawer Toggle
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Active Sidebar Tab Tracker
+  const [activeTab, setActiveTab] = useState<
+    'dashboard' | 'students' | 'tuition' | 'announcements' | 'audit' | 'config'
+  >('dashboard');
+
+  // Multi-user & Login state simulator
+  const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]); // Starts as Tran Minh Duc (SUPER_ADMIN)
+
+  // Calendar Period (Accounting month and year)
+  const [currentMonth, setCurrentMonth] = useState<number>(5); // May
+  const [currentYear, setCurrentYear] = useState<number>(2026);
+
+  // States fetched/stored in Local Storage
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [payments, setPayments] = useState<TuitionPayment[]>([]);
+  const [transfers, setTransfers] = useState<TeacherTransfer[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [baselines, setBaselines] = useState<Baseline[]>([]);
+  const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
+
+  // CRUD & Search Helper states
+  const [searchClass, setSearchClass] = useState('');
+  const [searchStudent, setSearchStudent] = useState('');
+  const [dashboardSearch, setDashboardSearch] = useState('');
+  const [monthsBefore, setMonthsBefore] = useState<number>(3);
+  const [monthsAfter, setMonthsAfter] = useState<number>(2);
+  const [statusFilterStudent, setStatusFilterStudent] = useState<string>('Active');
+  const [classFilterStudent, setClassFilterStudent] = useState<string>('ALL');
+
+  // Form Modals Toggles
+  const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
+
+  // Active Receipt Modal visualization
+  const [activeReceiptPayment, setActiveReceiptPayment] = useState<TuitionPayment | null>(null);
+  const [receiptStudent, setReceiptStudent] = useState<Student | null>(null);
+
+  // Local Storage synchronizer & hydration
+  useEffect(() => {
+    // Hydro classes
+    const lcClasses = localStorage.getItem('mec_classes');
+    if (lcClasses) setClasses(JSON.parse(lcClasses));
+    else {
+      setClasses(INITIAL_CLASSES);
+      localStorage.setItem('mec_classes', JSON.stringify(INITIAL_CLASSES));
+    }
+
+    // Hydro students
+    const lcStudents = localStorage.getItem('mec_students');
+    if (lcStudents) setStudents(JSON.parse(lcStudents));
+    else {
+      setStudents(INITIAL_STUDENTS);
+      localStorage.setItem('mec_students', JSON.stringify(INITIAL_STUDENTS));
+    }
+
+    // Hydro payments
+    const lcPayments = localStorage.getItem('mec_payments');
+    if (lcPayments) setPayments(JSON.parse(lcPayments));
+    else {
+      setPayments(INITIAL_PAYMENTS);
+      localStorage.setItem('mec_payments', JSON.stringify(INITIAL_PAYMENTS));
+    }
+
+    // Hydro transfers
+    const lcTransfers = localStorage.getItem('mec_transfers');
+    if (lcTransfers) setTransfers(JSON.parse(lcTransfers));
+    else {
+      setTransfers(INITIAL_TRANSFERS);
+      localStorage.setItem('mec_transfers', JSON.stringify(INITIAL_TRANSFERS));
+    }
+
+    // Hydro announcements
+    const lcAnns = localStorage.getItem('mec_announcements');
+    if (lcAnns) setAnnouncements(JSON.parse(lcAnns));
+    else {
+      setAnnouncements(INITIAL_ANNOUNCEMENTS);
+      localStorage.setItem('mec_announcements', JSON.stringify(INITIAL_ANNOUNCEMENTS));
+    }
+
+    // Hydro audit log
+    const lcAudits = localStorage.getItem('mec_audits');
+    if (lcAudits) setAuditLogs(JSON.parse(lcAudits));
+    else {
+      setAuditLogs(INITIAL_AUDIT_LOGS);
+      localStorage.setItem('mec_audits', JSON.stringify(INITIAL_AUDIT_LOGS));
+    }
+
+    // Hydro baselines
+    const lcBaselines = localStorage.getItem('mec_baselines');
+    if (lcBaselines) setBaselines(JSON.parse(lcBaselines));
+    else {
+      setBaselines(INITIAL_BASELINES);
+      localStorage.setItem('mec_baselines', JSON.stringify(INITIAL_BASELINES));
+    }
+
+    // Hydro configs
+    const lcConfig = localStorage.getItem('mec_config');
+    if (lcConfig) setConfig(JSON.parse(lcConfig));
+    else {
+      setConfig(INITIAL_CONFIG);
+      localStorage.setItem('mec_config', JSON.stringify(INITIAL_CONFIG));
+    }
+  }, []);
+
+  // Sync helpers to keep local storage up to scratch
+  const updateLocalStorage = (key: string, data: any) => {
+    localStorage.setItem(key, JSON.stringify(data));
+  };
+
+  // Helper: Log audit trail to the system
+  const appendAuditLog = (type: AuditLog['entityType'], id: string, action: AuditLog['action'], oldValue: string, newValue: string) => {
+    const freshLog: AuditLog = {
+      auditId: `AUD-${Date.now().toString().substring(7)}`,
+      entityType: type,
+      entityId: id,
+      action: action,
+      oldValue: oldValue,
+      newValue: newValue,
+      modifiedBy: currentUser.fullName,
+      modifiedAt: new Date().toISOString()
+    };
+    const updated = [freshLog, ...auditLogs];
+    setAuditLogs(updated);
+    updateLocalStorage('mec_audits', updated);
+  };
+
+  // -------------------------------------------------------------
+  // AUTOMATED BILLING GENERATOR (Requirement 11)
+  // Whenever the Month/Year changes or a Student/Payment is hydrated,
+  // we check if an active student doesn't have a TuitionPayment slot
+  // for the selected Month/Year. If not, we automatically initialize
+  // it as UNPAID with their customized discounted tuition fee.
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (students.length === 0) return;
+
+    let hasCreatedAnyBill = false;
+    const freshPayments = [...payments];
+
+    students.forEach(std => {
+      // Only bill Active students
+      if (std.activeStatus !== 'Active') return;
+
+      const hasBill = freshPayments.some(
+        pay => pay.studentId === std.studentId && pay.month === currentMonth && pay.year === currentYear
+      );
+
+      if (!hasBill) {
+        hasCreatedAnyBill = true;
+        const autoPayment: TuitionPayment = {
+          paymentId: `PAY-${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`,
+          studentId: std.studentId,
+          classId: std.classId,
+          month: currentMonth,
+          year: currentYear,
+          amount: std.tuitionFee, // using student specific fee reflecting custom discount
+          paidStatus: 'Unpaid',
+          receiptNo: '',
+          note: 'Học phí tự dựng hàng tháng',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        freshPayments.push(autoPayment);
+      }
+    });
+
+    if (hasCreatedAnyBill) {
+      setPayments(freshPayments);
+      updateLocalStorage('mec_payments', freshPayments);
+    }
+  }, [students, payments, currentMonth, currentYear]);
+
+  // Is current hạch toán period baseline locked?
+  const isPeriodLocked = false;
+
+  // Month navigation buttons handler
+  const handlePrevMonth = () => {
+    if (currentMonth === 1) {
+      setCurrentMonth(12);
+      setCurrentYear(prev => prev - 1);
+    } else {
+      setCurrentMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 12) {
+      setCurrentMonth(1);
+      setCurrentYear(prev => prev + 1);
+    } else {
+      setCurrentMonth(prev => prev + 1);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // CLASS ACTIONS
+  // -------------------------------------------------------------
+  const handleSaveClass = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (currentUser.role === 'VIEWER') {
+      alert('Tài khoản của bạn chỉ có quyền Đọc (VIEWER), không thể khởi phát thao tác này!');
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+    const classNameVal = formData.get('className') as string;
+    const teacherNameVal = formData.get('teacherName') as string;
+    const scheduleVal = formData.get('schedule') as string;
+    const roomVal = formData.get('room') as string;
+    const tuitionVal = parseFloat(formData.get('tuitionDefault') as string) || config.defaultTuitionFee;
+    const noteVal = formData.get('note') as string;
+    const statusVal = formData.get('activeStatus') as Class['activeStatus'];
+
+    if (editingClass) {
+      // Edit class
+      const oldValSummary = JSON.stringify(editingClass);
+      const updatedClasses = classes.map(c => 
+        c.classId === editingClass.classId 
+          ? { 
+              ...c, 
+              className: classNameVal, 
+              teacherName: teacherNameVal, 
+              schedule: scheduleVal, 
+              room: roomVal, 
+              tuitionDefault: tuitionVal, 
+              note: noteVal, 
+              activeStatus: statusVal, 
+              updatedAt: new Date().toISOString() 
+            }
+          : c
+      );
+      setClasses(updatedClasses);
+      updateLocalStorage('mec_classes', updatedClasses);
+      
+      const updatedObj = updatedClasses.find(c => c.classId === editingClass.classId)!;
+      appendAuditLog('CLASS', editingClass.classId, 'UPDATE', oldValSummary, JSON.stringify(updatedObj));
+    } else {
+      // Add Class
+      const newId = `CLASS-${String(classes.length + 1).padStart(2, '0')}`;
+      const freshClass: Class = {
+        classId: newId,
+        className: classNameVal,
+        teacherName: teacherNameVal,
+        schedule: scheduleVal,
+        room: roomVal,
+        tuitionDefault: tuitionVal,
+        note: noteVal,
+        activeStatus: 'Active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const updated = [...classes, freshClass];
+      setClasses(updated);
+      updateLocalStorage('mec_classes', updated);
+      appendAuditLog('CLASS', newId, 'CREATE', '', JSON.stringify(freshClass));
+    }
+
+    setIsClassModalOpen(false);
+    setEditingClass(null);
+  };
+
+  const handleArchiveClass = (clazz: Class) => {
+    if (currentUser.role === 'VIEWER') return;
+    const oldSum = JSON.stringify(clazz);
+    const updated = classes.map(c => 
+      c.classId === clazz.classId 
+        ? { ...c, activeStatus: 'Archived' as const, updatedAt: new Date().toISOString() } 
+        : c
+    );
+    setClasses(updated);
+    updateLocalStorage('mec_classes', updated);
+    appendAuditLog('CLASS', clazz.classId, 'UPDATE', oldSum, 'Trạng thái: ARCHIVED (Soft delete)');
+  };
+
+  // -------------------------------------------------------------
+  // STUDENT ACTIONS
+  // -------------------------------------------------------------
+  const handleSaveStudent = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (currentUser.role === 'VIEWER') return;
+
+    const formData = new FormData(e.currentTarget);
+    const fullNameVal = formData.get('fullName') as string;
+    const nicknameVal = formData.get('nickname') as string;
+    const dobVal = formData.get('dateOfBirth') as string;
+    const genderVal = formData.get('gender') as Student['gender'];
+    const phoneVal = (formData.get('phone') as string) || '';
+    const parentNameVal = formData.get('parentName') as string;
+    const parentPhoneVal = formData.get('parentPhone') as string;
+    const addressVal = formData.get('address') as string;
+    const emailVal = formData.get('email') as string;
+    const classIdVal = classes[0]?.classId || 'CLASS-01';
+    const tuitionFeeVal = parseFloat(formData.get('tuitionFee') as string) || config.defaultTuitionFee;
+    const discountVal = 0;
+    const noteVal = formData.get('note') as string;
+    const statusVal = formData.get('activeStatus') as Student['activeStatus'];
+
+    const actualFee = tuitionFeeVal;
+
+    if (editingStudent) {
+      // Edit student
+      const oldValStr = JSON.stringify(editingStudent);
+      const updated = students.map(s => 
+        s.studentId === editingStudent.studentId
+          ? {
+              ...s,
+              fullName: fullNameVal,
+              nickname: nicknameVal,
+              dateOfBirth: dobVal,
+              gender: genderVal,
+              phone: phoneVal,
+              parentName: parentNameVal,
+              parentPhone: parentPhoneVal,
+              address: addressVal,
+              email: emailVal,
+              classId: classIdVal,
+              tuitionFee: actualFee,
+              discount: discountVal,
+              note: noteVal,
+              activeStatus: statusVal,
+              updatedAt: new Date().toISOString()
+            }
+          : s
+      );
+      setStudents(updated);
+      updateLocalStorage('mec_students', updated);
+      
+      const newObj = updated.find(s => s.studentId === editingStudent.studentId)!;
+      appendAuditLog('STUDENT', editingStudent.studentId, 'UPDATE', oldValStr, JSON.stringify(newObj));
+    } else {
+      // Create student
+      const newId = `STUD-${String(students.length + 1).padStart(3, '0')}`;
+      const freshStud: Student = {
+        studentId: newId,
+        fullName: fullNameVal,
+        nickname: nicknameVal,
+        dateOfBirth: dobVal,
+        gender: genderVal,
+        phone: phoneVal,
+        parentName: parentNameVal,
+        parentPhone: parentPhoneVal,
+        address: addressVal,
+        email: emailVal,
+        classId: classIdVal,
+        tuitionFee: actualFee,
+        discount: discountVal,
+        note: noteVal,
+        activeStatus: 'Active',
+        enrollmentDate: new Date().toISOString().substring(0, 10),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const updated = [...students, freshStud];
+      setStudents(updated);
+      updateLocalStorage('mec_students', updated);
+
+      appendAuditLog('STUDENT', newId, 'CREATE', '', JSON.stringify(freshStud));
+    }
+
+    setIsStudentModalOpen(false);
+    setEditingStudent(null);
+  };
+
+  const handleArchiveStudent = (stud: Student) => {
+    if (currentUser.role === 'VIEWER') return;
+    const oldSum = JSON.stringify(stud);
+    const updated = students.map(s => 
+      s.studentId === stud.studentId 
+        ? { ...s, activeStatus: 'Archived' as const, updatedAt: new Date().toISOString() } 
+        : s
+    );
+    setStudents(updated);
+    updateLocalStorage('mec_students', updated);
+    appendAuditLog('STUDENT', stud.studentId, 'UPDATE', oldSum, 'Trạng thái: ARCHIVED (Soft delete student)');
+  };
+
+  // -------------------------------------------------------------
+  // TUITION / COLLECTION MODULE
+  // -------------------------------------------------------------
+  const handleMarkPaidSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (currentUser.role === 'VIEWER' || currentUser.role === 'STAFF') {
+      alert('Tài khoản của bạn không được phân quyền thu học phí sỹ sớ!');
+      return;
+    }
+
+    if (isPeriodLocked) {
+      alert('Tháng này đã được KHÓA SỔ từ Điểm Neo Điểm Kế toán. Không thể cập nhật học phí đóng!');
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+    const paidAmt = parseFloat(formData.get('paidAmount') as string) || 0;
+    const paidDateVal = formData.get('paidDate') as string;
+    const noteVal = formData.get('note') as string;
+    const collectorVal = formData.get('collectedBy') as string;
+
+    const matchStudent = students.find(s => s.studentId === payingStudentId)!;
+    const oldBill = payments.find(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear);
+    const oldSum = oldBill ? JSON.stringify(oldBill) : '';
+
+    const sequence = payments.filter(p => p.month === currentMonth && p.year === currentYear && p.paidStatus === 'Paid').length + 1;
+    const receiptGenerated = `${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`;
+
+    let updated;
+    const existingIndex = payments.findIndex(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear);
+    if (existingIndex >= 0) {
+      updated = payments.map(p => {
+        if (p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear) {
+          return {
+            ...p,
+            amount: paidAmt,
+            paidStatus: 'Paid' as const,
+            paidDate: paidDateVal,
+            collectedBy: collectorVal,
+            receiptNo: receiptGenerated,
+            note: noteVal,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return p;
+      });
+    } else {
+      const newBill: TuitionPayment = {
+        paymentId: `PAY-${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`,
+        studentId: payingStudentId!,
+        classId: matchStudent?.classId || 'CLASS-01',
+        month: currentMonth,
+        year: currentYear,
+        amount: paidAmt,
+        paidStatus: 'Paid' as const,
+        paidDate: paidDateVal,
+        collectedBy: collectorVal,
+        receiptNo: receiptGenerated,
+        note: noteVal,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      updated = [...payments, newBill];
+    }
+
+    setPayments(updated);
+    updateLocalStorage('mec_payments', updated);
+
+    appendAuditLog(
+      'TUITION', 
+      payingStudentId || 'N/A', 
+      'UPDATE', 
+      oldSum, 
+      `Xác nhận đóng Học phí: ${formatVND(paidAmt)}, Phiếu: ${receiptGenerated}, Thu bởi: ${collectorVal}`
+    );
+
+    // Auto-trigger visual receipt display immediately
+    const foundPayment = updated.find(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear)!;
+    setReceiptStudent(matchStudent);
+    setActiveReceiptPayment(foundPayment);
+
+    setIsPayModalOpen(false);
+    setPayingStudentId(null);
+  };
+
+  const handleMarkUnpaid = (pay: TuitionPayment) => {
+    if (currentUser.role !== 'SUPER_ADMIN' && currentUser.role !== 'ADMIN') {
+      alert('Bạn cần vai trò ADMIN hoặc ban quản trị tối cao để hủy xác nhận thanh toán này!');
+      return;
+    }
+
+    if (isPeriodLocked) {
+      alert('Tháng hạch toán đã bị KHÓA SỔ. Mở khóa từ mục Chốt số trước khi hủy phí!');
+      return;
+    }
+
+    if (confirm('Bạn có hoàn tất hủy xác nhận đóng học phí này? Trạng thái sẽ trở về UNPAID.')) {
+      const oldSum = JSON.stringify(pay);
+      const updated = payments.map(p => 
+        p.paymentId === pay.paymentId 
+          ? { ...p, paidStatus: 'Unpaid' as const, receiptNo: '', paidDate: '', collectedBy: '', note: 'Đã hủy hoàn phí', updatedAt: new Date().toISOString() }
+          : p
+      );
+      setPayments(updated);
+      updateLocalStorage('mec_payments', updated);
+
+      appendAuditLog('TUITION', pay.studentId, 'UPDATE', oldSum, 'Hủy xác nhận thu học phí - Quay lại UNPAID');
+    }
+  };
+
+  // -------------------------------------------------------------
+  // INTER-COMPONENT CHANNELS & STATE UPDATE INJECTORS
+  // -------------------------------------------------------------
+  const handleAddNewAnnouncement = (newAnn: Omit<Announcement, 'announcementId' | 'createdAt' | 'updatedAt'>) => {
+    const freshId = `ANN-${Date.now().toString().substring(8)}`;
+    const fullAnn: Announcement = {
+      ...newAnn,
+      announcementId: freshId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const updated = [fullAnn, ...announcements];
+    setAnnouncements(updated);
+    updateLocalStorage('mec_announcements', updated);
+
+    appendAuditLog('ANNOUNCEMENT', freshId, 'CREATE', '', JSON.stringify(fullAnn));
+  };
+
+  const handleUpdateAnnouncement = (annId: string, updatedFields: Partial<Announcement>) => {
+    const target = announcements.find(a => a.announcementId === annId);
+    const oldSum = target ? JSON.stringify(target) : '';
+
+    const updated = announcements.map(a => 
+      a.announcementId === annId ? { ...a, ...updatedFields, updatedAt: new Date().toISOString() } : a
+    );
+    setAnnouncements(updated);
+    updateLocalStorage('mec_announcements', updated);
+
+    appendAuditLog('ANNOUNCEMENT', annId, 'UPDATE', oldSum, JSON.stringify(updatedFields));
+  };
+
+  const handleDeleteAnnouncement = (annId: string) => {
+    const target = announcements.find(a => a.announcementId === annId);
+    const oldSum = target ? JSON.stringify(target) : '';
+
+    const updated = announcements.filter(a => a.announcementId !== annId);
+    setAnnouncements(updated);
+    updateLocalStorage('mec_announcements', updated);
+
+    appendAuditLog('ANNOUNCEMENT', annId, 'DELETE', oldSum, 'Tháo gỡ tin thông báo');
+  };
+
+  const handleAddTransfer = (newTransfer: Omit<TeacherTransfer, 'transferId' | 'createdAt'>) => {
+    const xferId = `XFER-${Date.now().toString().substring(8)}`;
+    const fullXfer: TeacherTransfer = {
+      ...newTransfer,
+      transferId: xferId,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [fullXfer, ...transfers];
+    setTransfers(updated);
+    updateLocalStorage('mec_transfers', updated);
+
+    appendAuditLog('TRANSFER', xferId, 'CREATE', '', JSON.stringify(fullXfer));
+  };
+
+  const handleCreateBaseline = (m: number, y: number) => {
+    const freshId = `BASE-${y}${String(m).padStart(2, '0')}`;
+    const activeStudentsCountObj = students.filter(s => s.activeStatus === 'Active').length;
+    const collectedPaymentsObj = payments.filter(p => p.month === m && p.year === y && p.paidStatus === 'Paid');
+    const totalCollectedAmountObj = collectedPaymentsObj.reduce((sum, p) => sum + p.amount, 0);
+    const monthTransfersObj = transfers.filter(t => t.month === m && t.year === y);
+    const totalTransferredAmountObj = monthTransfersObj.reduce((sum, t) => sum + t.transferAmount, 0);
+
+    const freshBaseline: Baseline = {
+      baselineId: freshId,
+      month: m,
+      year: y,
+      totalStudents: activeStudentsCountObj,
+      totalCollected: totalCollectedAmountObj,
+      totalTransferred: totalTransferredAmountObj,
+      remainingAmount: totalCollectedAmountObj - totalTransferredAmountObj,
+      snapshotJson: JSON.stringify({
+        students: students.filter(s => s.activeStatus === 'Active'),
+        payments: payments.filter(p => p.month === m && p.year === y),
+        transfers: transfers.filter(t => t.month === m && t.year === y)
+      }),
+      createdBy: currentUser.fullName,
+      createdAt: new Date().toISOString(),
+      status: 'OPEN'
+    };
+
+    const updated = [freshBaseline, ...baselines];
+    setBaselines(updated);
+    updateLocalStorage('mec_baselines', updated);
+
+    appendAuditLog('BASELINE', freshId, 'BASELINE_CREATE', '', `Tạo snapshot chốt toán tháng ${m}/${y}`);
+  };
+
+  const handleLockBaseline = (id: string) => {
+    const target = baselines.find(b => b.baselineId === id);
+    const oldSum = target ? JSON.stringify(target) : '';
+
+    const updated = baselines.map(b => b.baselineId === id ? { ...b, status: 'LOCKED' as const } : b);
+    setBaselines(updated);
+    updateLocalStorage('mec_baselines', updated);
+
+    appendAuditLog('BASELINE', id, 'MONTH_LOCK', oldSum, 'Mã khóa chốt sổ: Trạng thái đóng băng (LOCKED)');
+  };
+
+  const handleUnlockBaseline = (id: string) => {
+    const target = baselines.find(b => b.baselineId === id);
+    const oldSum = target ? JSON.stringify(target) : '';
+
+    const updated = baselines.map(b => b.baselineId === id ? { ...b, status: 'OPEN' as const } : b);
+    setBaselines(updated);
+    updateLocalStorage('mec_baselines', updated);
+
+    appendAuditLog('BASELINE', id, 'MONTH_UNLOCK', oldSum, 'Mở khóa chốt sổ tháng: Trạng thái chỉnh hạch mở (OPEN)');
+  };
+
+  const handleUpdateConfig = (newCfg: Partial<AppConfig>) => {
+    const oldSum = JSON.stringify(config);
+    const updated = { ...config, ...newCfg };
+    setConfig(updated);
+    updateLocalStorage('mec_config', updated);
+
+    appendAuditLog('CONFIGURATION', 'CENTER_CONFIG', 'UPDATE', oldSum, JSON.stringify(newCfg));
+  };
+
+  const handleSwitchUser = (uname: string) => {
+    const match = MOCK_USERS.find(u => u.username === uname);
+    if (match) {
+      const prevName = currentUser.fullName;
+      setCurrentUser(match);
+      appendAuditLog('AUTH', match.username, 'LOGIN', `Cựu: ${prevName}`, `Thay đổi phiên chuyển đổi nội bộ thành ${match.fullName}`);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // EXPORTS
+  // -------------------------------------------------------------
+  const handleExportStudents = () => {
+    const dataToExport = students.filter(s => {
+      const matchSearch = s.fullName.toLowerCase().includes(searchStudent.toLowerCase()) || 
+                          s.parentPhone.includes(searchStudent) || 
+                          (s.phone && s.phone.includes(searchStudent));
+      const matchStatus = s.activeStatus === statusFilterStudent;
+      return matchSearch && matchStatus;
+    }).map(s => {
+      return {
+        'Mã định danh': s.studentId,
+        'Họ và tên': s.fullName,
+        'Gọi tên': s.nickname || '',
+        'SĐT học viên': s.phone || '',
+        'Tên phụ huynh': s.parentName,
+        'SĐT Phụ huynh': s.parentPhone,
+        'Địa chỉ': s.address,
+        'Học phí mỗi tháng': s.tuitionFee,
+        'Ngày ghi danh': s.enrollmentDate,
+        'Trạng thái': s.activeStatus
+      };
+    });
+
+    exportToCSV(
+      dataToExport,
+      ['Mã định danh', 'Họ và tên', 'Gọi tên', 'SĐT học viên', 'Tên phụ huynh', 'SĐT Phụ huynh', 'Địa chỉ', 'Học phí mỗi tháng', 'Ngày ghi danh', 'Trạng thái'],
+      buildFilename('danh_sach_hoc_sinh', 'csv')
+    );
+    appendAuditLog('EXPORT', 'STUDENTS', 'EXPORT', '', 'Xuất danh sách học viên chọn lọc ra tập tin CSV thành công.');
+  };
+
+  const handleExportTuitionReport = () => {
+    const reportList = payments.filter(p => p.month === currentMonth && p.year === currentYear).map(p => {
+      const std = students.find(s => s.studentId === p.studentId);
+      return {
+        'Mã Phiếu': p.paymentId,
+        'Học sinh': std?.fullName || 'Ẩn danh',
+        'Thời kỳ': `${getMonthName(p.month)}/${p.year}`,
+        'Khoản thực thu': p.amount,
+        'Trạng thái thu': p.paidStatus === 'Paid' ? 'ĐÃ ĐÓNG' : 'CHƯA ĐÓNG',
+        'Số Biên Lai': p.receiptNo,
+        'Ngày thu': p.paidDate || '',
+        'Người thu': p.collectedBy || '',
+        'Mô tả': p.note
+      };
+    });
+
+    exportToCSV(
+      reportList,
+      ['Mã Phiếu', 'Học sinh', 'Thời kỳ', 'Khoản thực thu', 'Trạng thái thu', 'Số Biên Lai', 'Ngày thu', 'Người thu', 'Mô tả'],
+      buildFilename('bao_cao_hoc_phi', 'csv', currentMonth, currentYear)
+    );
+    appendAuditLog('EXPORT', 'TUITION', 'EXPORT', '', `Xuất báo cáo biên lai thanh toán tháng ${currentMonth}/${currentYear}`);
+  };
+
+  // -------------------------------------------------------------
+  // ANALYTICAL METRICS
+  // -------------------------------------------------------------
+  const allCurrentPayments = payments.filter(p => p.month === currentMonth && p.year === currentYear);
+  const paidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Paid').length;
+  const unpaidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').length;
+
+  const currentCollectedAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
+  const currentUnpaidAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').reduce((sum, p) => sum + p.amount, 0);
+
+  const currentTransferredTotal = transfers.filter(t => t.month === currentMonth && t.year === currentYear).reduce((sum, t) => sum + t.transferAmount, 0);
+  const currentRemainingQuo = currentCollectedAmountSum - currentTransferredTotal;
+
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row bg-emerald-50/45 text-emerald-950 font-sans">
+      
+      {/* ----------------- MOBILE TOPBAR ----------------- */}
+      <header className="md:hidden flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-3 sticky top-0 z-40 no-print">
+        <div className="flex items-center gap-2">
+          <span className="p-1 rounded-lg bg-emerald-600 text-white">
+            <Building className="h-4.5 w-4.5" />
+          </span>
+          <span className="font-bold text-xs tracking-tight text-emerald-950 uppercase">{config.receiptPrefix} Portal</span>
+        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-1 rounded bg-white border border-emerald-100 text-emerald-900"
+        >
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </header>
+
+      {/* ----------------- SIDEBAR ----------------- */}
+      {/* Sidebar Overlay and Container */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-[#d1fae5] transform transition-transform duration-300 md:translate-x-0 md:static md:flex md:flex-col shrink-0 no-print
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        {/* Brand Banner */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-emerald-50/60 bg-emerald-50/10">
+          <span className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold shadow-xs">
+            <GraduationCap className="h-5 w-5 text-white" />
+          </span>
+          <div>
+            <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">WINGCHUN BÌNH TÂN</span>
+            <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono leading-none block mt-1">Võ Đường Nam Anh Quang</span>
+          </div>
+        </div>
+
+        {/* Sidebar Tabs Links */}
+        <nav className="flex-1 px-4 py-4 space-y-1 block">
+          {[
+            { id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard },
+            { id: 'tuition', label: 'Quản Lý Học Phí', icon: CreditCard },
+            { id: 'students', label: 'Hồ Sơ Học Viên', icon: Users },
+            { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone },
+            { id: 'config', label: 'Cấu Hình', icon: Settings },
+            { id: 'audit', label: 'Lịch sử', icon: History }
+          ].map(item => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-2 text-left text-xs font-semibold tracking-wide transition-all duration-150 cursor-pointer rounded-lg
+                  ${isActive 
+                    ? 'bg-emerald-500 text-white shadow-sm font-bold' 
+                    : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-950'
+                  }
+                `}
+              >
+                <Icon className={`h-4.5 w-4.5 ${isActive ? 'text-white' : 'text-emerald-500/80'}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer info containing active User card */}
+        <div className="p-4 border-t border-emerald-50 bg-emerald-50/20">
+          <div className="flex items-center gap-3 p-2 bg-emerald-50 rounded-xl border border-emerald-100/50">
+            <div className="w-9 h-9 rounded-full bg-emerald-200 border-2 border-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-emerald-700 font-display text-sm">
+              {currentUser.fullName ? currentUser.fullName.split(' ').pop()?.substring(0, 2).toUpperCase() : 'AD'}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-extrabold text-emerald-900 truncate leading-tight">{currentUser.fullName}</p>
+              <p className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold leading-none mt-1">{currentUser.role}</p>
+            </div>
+          </div>
+          <div className="text-center text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-3 border-t border-emerald-50/60 pt-3.5">
+             {config.centerName}
+          </div>
+        </div>
+      </aside>
+
+      {/* Behind mask for mobile drawer */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)} 
+          className="fixed inset-0 z-30 bg-black/45 md:hidden no-print"
+        ></div>
+      )}
+
+      {/* ----------------- CORE MAIN PANEL ----------------- */}
+      <main className="flex-1 flex flex-col min-w-0 min-h-screen">
+        
+        {/* TOP SYSTEM HEADBAND PANEL */}
+        <header className="bg-white border-b border-[#d1fae5] px-6 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sticky top-0 z-10 shadow-xs no-print">
+          
+          {/* Calendar Accounting indicator */}
+          <div className="flex items-center gap-3">
+            <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-100">
+              <CalendarDays className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <p className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-widest leading-none">Kỳ hạch toán hiện tại</p>
+              <div className="flex items-center gap-2 mt-1">
+                <button 
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-full hover:bg-emerald-50 transition-colors cursor-pointer text-emerald-700"
+                  title="Tháng trước"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="font-extrabold text-xs text-[#064e3b] uppercase tracking-wide font-display">Tháng {currentMonth} / {currentYear}</span>
+                <button 
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-full hover:bg-emerald-50 transition-colors cursor-pointer text-emerald-700"
+                  title="Tháng sau"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Active user selection & Signout indicator */}
+          <div className="flex items-center gap-3.5 self-end sm:self-auto">
+            {/* User credentials fast indicator switcher */}
+            <div className="flex items-center gap-1 border border-emerald-100 bg-white rounded-lg p-1 shadow-2xs">
+              <span className="p-1 rounded bg-emerald-50 text-emerald-700">
+                <UserCheck className="h-3.5 w-3.5" />
+              </span>
+              <div className="text-left px-1.5 py-0.5">
+                <p className="text-[11px] font-extrabold text-emerald-950 leading-3">{currentUser.fullName}</p>
+                <span className="text-[9px] text-[#059669] font-bold font-mono uppercase">{currentUser.role === 'SUPER_ADMIN' ? 'Ban Giám Sát' : currentUser.role === 'ADMIN' ? 'Quản Trị Viên' : currentUser.role === 'STAFF' ? 'Nhân Viên' : 'Người Xem'}</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* ----------------- CORE VIEWS MAIN SPACE ----------------- */}
+        <section className="flex-1 p-5 md:p-6 select-none bg-emerald-50/10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-6"
+            >
+              
+              {/* ==============================================================
+                  MODULE 2: ANALYTICAL DASHBOARD OVERVIEW (Simplified)
+                  ============================================================== */}
+              {activeTab === 'dashboard' && (
+                <div className="space-y-6">
+                  {/* Wingchun Training Center Profile Header Banner */}
+                  <div className="bg-[#f0fdf4] border border-emerald-100 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 text-emerald-900 pointer-events-none hidden md:block">
+                      <GraduationCap className="h-32 w-32" />
+                    </div>
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+                      <div className="space-y-2.5">
+                        <div className="inline-flex items-center gap-2 bg-emerald-100/70 border border-emerald-200 rounded-full px-3 py-1">
+                          <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                          <span className="text-[10.5px] font-extrabold text-[#115e59] uppercase tracking-wider font-mono">Thông Tin Võ Đường</span>
+                        </div>
+                        <h1 className="text-xl font-black text-emerald-950 tracking-tight leading-snug">
+                          🥋 LỚP VỊNH XUÂN BÌNH TÂN — VÕ ĐƯỜNG NAM ANH QUANG
+                        </h1>
+                        <p className="text-xs text-emerald-900/80 max-w-2xl leading-relaxed">
+                          Nhận võ sinh thường xuyên chiêu sinh mọi cấp độ. Chương trình huấn luyện Vịnh Xuân Quyền chuyên sâu giúp tăng cường thể chất, phản xạ tự vệ và rèn luyện đạo đức võ thuật.
+                        </p>
+                      </div>
+
+                      {/* Contact Info Card */}
+                      <div className="bg-white border border-emerald-50 rounded-xl p-4 shadow-3xs text-xs space-y-2 md:w-80 shrink-0">
+                        <h3 className="font-extrabold text-emerald-950 uppercase text-[10px] tracking-widest border-b border-gray-100 pb-1.5 flex items-center gap-1">
+                          <Phone className="h-3 w-3 text-emerald-600" /> Sổ Hotline Liên Hệ
+                        </h3>
+                        <p className="font-bold text-gray-800">VS Nam Anh Quang: <a href="tel:0938372286" className="text-emerald-700 hover:underline">0938 372 286</a></p>
+                        <p className="text-[11px] text-gray-500 font-medium">Nhận học viên thường xuyên kể cả chưa có kinh nghiệm võ thuật.</p>
+                      </div>
+                    </div>
+
+                    {/* Meta quick-grid details */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-emerald-200/50 pt-5 mt-5 text-xs text-emerald-950 font-semibold">
+                      <div className="flex items-start gap-2.5">
+                        <CalendarDays className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">⏰ Lịch Tập Luyện</p>
+                          <p className="text-emerald-900 mt-0.5 font-bold">18:30 – 20:00</p>
+                          <p className="text-emerald-800 text-[10.5px]">Thứ 2 – 4 – 6 hàng tuần</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <Users className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">👨‍👩‍👧‍👦 Đối Tượng Tham Gia</p>
+                          <p className="text-emerald-900 mt-0.5 font-bold">Nam / Nữ từ 6 – 60 tuổi</p>
+                          <p className="text-emerald-800 text-[10.5px]">Không yêu cầu kinh nghiệm ban đầu</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5">
+                        <MapPin className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold uppercase tracking-wider text-[9px] text-[#0f766e]">📍 Địa Chỉ Võ Đường</p>
+                          <p className="text-emerald-900 mt-0.5 font-bold">Khu Mua Sắm Anh Hào</p>
+                          <p className="text-emerald-800 text-[10.5px] leading-snug">666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Simple Counters Grid */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {/* Stat Active Students */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Võ sinh đang hoạt động</p>
+                        <h3 className="text-2xl font-black text-emerald-900 mt-1">{students.filter(s => s.activeStatus === 'Active').length} võ sinh</h3>
+                        <p className="text-[10.5px] text-gray-400 mt-1">Sĩ số tích cực tập luyện thường kỳ</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                        <Users className="h-5 w-5" />
+                      </div>
+                    </div>
+
+                    {/* Stat Total Collected in CURRENT month */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Học phí thu tháng {currentMonth}</p>
+                        <h3 className="text-2xl font-black text-emerald-700 mt-1">{formatVND(currentCollectedAmountSum)}</h3>
+                        <p className="text-[10.5px] text-emerald-600 font-bold mt-1">Đã hoàn tất: {paidCurrentCount} võ sinh</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-[#f0fdf4] text-emerald-600 flex items-center justify-center shrink-0">
+                        <CheckCircle className="h-5 w-5" />
+                      </div>
+                    </div>
+
+                    {/* Stat Outstanding Unpaid */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Chờ thu tháng {currentMonth}</p>
+                        <h3 className="text-2xl font-black text-rose-700 mt-1">{formatVND(currentUnpaidAmountSum)}</h3>
+                        <p className="text-[10.5px] text-rose-600 font-bold mt-1">Còn lại: {unpaidCurrentCount} võ sinh</p>
+                      </div>
+                      <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
+                        <XCircle className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Multi-month Advanced Tuition Status Matrix Block */}
+                  <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs space-y-4 font-sans">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100 pb-4">
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                          📋 BÁO CÁO THU HỌC PHÍ ĐA THÁNG
+                        </h4>
+                        <p className="text-[11px] text-gray-400">
+                          Ma trận giám sát lịch sử đóng học phí mở rộng giúp dễ dàng đối chiếu đóng học kỳ trước và kế tiếp.
+                        </p>
+                      </div>
+
+                      {/* Interactive Configuration Toolbar */}
+                      <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100 text-xs shadow-3xs">
+                        <div className="flex items-center gap-1.5">
+                          <label className="text-gray-400 font-bold text-[10px] uppercase">Quá khứ:</label>
+                          <select
+                            value={monthsBefore}
+                            onChange={(e) => setMonthsBefore(parseInt(e.target.value) || 0)}
+                            className="bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] font-bold focus:outline-none focus:border-emerald-500 cursor-pointer text-gray-700"
+                          >
+                            <option value="0">0 tháng</option>
+                            <option value="1">1 tháng trước</option>
+                            <option value="2">2 tháng trước</option>
+                            <option value="3">3 tháng trước (Mặc định)</option>
+                            <option value="4">4 tháng trước</option>
+                            <option value="5">5 tháng trước</option>
+                            <option value="6">6 tháng trước</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 border-l border-gray-200 pl-3">
+                          <label className="text-gray-400 font-bold text-[10px] uppercase">Tương lai:</label>
+                          <select
+                            value={monthsAfter}
+                            onChange={(e) => setMonthsAfter(parseInt(e.target.value) || 0)}
+                            className="bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] font-bold focus:outline-none focus:border-emerald-500 cursor-pointer text-gray-700"
+                          >
+                            <option value="0">0 tháng</option>
+                            <option value="1">1 tháng sau</option>
+                            <option value="2">2 tháng sau (Mặc định)</option>
+                            <option value="3">3 tháng sau</option>
+                            <option value="4">4 tháng sau</option>
+                            <option value="5">5 tháng sau</option>
+                            <option value="6">6 tháng sau</option>
+                          </select>
+                        </div>
+
+                        <div className="relative border-l border-gray-200 pl-3">
+                          <Search className="absolute top-2 left-5 h-3.5 w-3.5 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Lọc võ sinh..."
+                            value={dashboardSearch}
+                            onChange={(e) => setDashboardSearch(e.target.value)}
+                            className="w-40 sm:w-48 rounded bg-white border border-gray-200 py-1 pl-8 pr-2 text-[11px] focus:outline-none focus:border-emerald-500 text-gray-700 font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Matrix table representation */}
+                    <div className="overflow-x-auto">
+                      {(() => {
+                        const computedRange = getMonthRange(currentMonth, currentYear, monthsBefore, monthsAfter);
+                        return (
+                          <table className="w-full text-xs text-left border-collapse border border-gray-100">
+                            <thead className="bg-[#f0f9f3] text-[10px] uppercase font-bold text-[#14532d] sticky top-0 border-b border-gray-200">
+                              <tr>
+                                <th className="px-3 py-3 font-semibold text-center border-r border-gray-100">ID</th>
+                                <th className="px-4 py-3 font-bold border-r border-gray-100">Họ & Tên Võ Sinh</th>
+                                <th className="px-3 py-3 border-r border-gray-100">SĐT Võ Sinh</th>
+                                <th className="px-3 py-3 border-r border-gray-100">Phụ Huynh / SĐT</th>
+                                {computedRange.map(item => {
+                                  const isCurrent = item.month === currentMonth && item.year === currentYear;
+                                  return (
+                                    <th 
+                                      key={`${item.month}-${item.year}`} 
+                                      className={`px-2 py-3 text-center border-r border-gray-100 ${isCurrent ? 'bg-[#d1fae5] border-l-2 border-r-2 border-[#10b981] text-emerald-950 font-black' : 'font-semibold'}`}
+                                    >
+                                      Tháng {item.month}/{item.year}
+                                      {isCurrent && <span className="block text-[8px] text-emerald-800 font-normal normal-case">Kỳ này</span>}
+                                    </th>
+                                  );
+                                })}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {students.filter(s => {
+                                const matchSearch = s.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
+                                                    s.parentPhone.includes(dashboardSearch) || 
+                                                    (s.phone && s.phone.includes(dashboardSearch));
+                                const matchStatus = s.activeStatus === 'Active';
+                                return matchSearch && matchStatus;
+                              }).length === 0 ? (
+                                <tr>
+                                  <td colSpan={4 + computedRange.length} className="px-4 py-8 text-center text-gray-400">
+                                    Không tìm thấy võ sinh nào hoạt động thỏa mãn tìm kiếm.
+                                  </td>
+                                </tr>
+                              ) : (
+                                students.filter(s => {
+                                  const matchSearch = s.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
+                                                      s.parentPhone.includes(dashboardSearch) || 
+                                                      (s.phone && s.phone.includes(dashboardSearch));
+                                  const matchStatus = s.activeStatus === 'Active';
+                                  return matchSearch && matchStatus;
+                                }).map((st) => {
+                                  return (
+                                    <tr key={st.studentId} className="hover:bg-gray-50/20 transition-colors">
+                                      <td className="px-3 py-3.5 font-mono text-[9.5px] text-gray-400 text-center border-r border-gray-100 font-bold">{st.studentId}</td>
+                                      <td className="px-4 py-3.5 font-bold text-gray-900 border-r border-gray-100">
+                                        <p>{st.fullName}</p>
+                                        {st.nickname && <span className="text-[10px] text-emerald-700 italic font-medium">Gọi: {st.nickname}</span>}
+                                      </td>
+                                      <td className="px-3 py-3.5 font-mono text-[11px] text-gray-700 border-r border-gray-100">
+                                        {st.phone || <span className="text-gray-300 italic font-normal text-[10px]">Trống</span>}
+                                      </td>
+                                      <td className="px-3 py-3.5 border-r border-gray-100 text-gray-600">
+                                        <p className="font-semibold text-[11.5px]">{st.parentName}</p>
+                                        <span className="text-[10px] text-gray-405 font-mono">{st.parentPhone}</span>
+                                      </td>
+                                      {computedRange.map(item => {
+                                        const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
+                                        const isCellPaid = cellPay?.paidStatus === 'Paid';
+                                        const isCurrent = item.month === currentMonth && item.year === currentYear;
+
+                                        return (
+                                          <td 
+                                            key={`${st.studentId}-${item.month}-${item.year}`}
+                                            className={`px-2 py-3.5 text-center border-r border-gray-100 ${isCurrent ? 'bg-emerald-50/20 font-semibold' : ''}`}
+                                          >
+                                            {isCellPaid ? (
+                                              <div className="inline-flex flex-col items-center justify-center p-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded min-w-[80px] w-full text-center">
+                                                <span className="text-[10px] font-bold flex items-center justify-center gap-0.5 text-emerald-700">
+                                                  <Check className="h-3 w-3" /> Đã nộp
+                                                </span>
+                                                {cellPay.paidDate && (
+                                                  <span className="text-[8px] mt-0.5 opacity-80 text-emerald-600 block">
+                                                    {cellPay.paidDate.substring(8, 10)}/{cellPay.paidDate.substring(5, 7)}
+                                                  </span>
+                                                )}
+                                                <button
+                                                  onClick={() => {
+                                                    setReceiptStudent(st);
+                                                    setActiveReceiptPayment(cellPay);
+                                                  }}
+                                                  className="mt-1 text-[8.5px] text-emerald-800 hover:text-emerald-950 underline bg-transparent cursor-pointer font-bold block"
+                                                  title="Xem & in biên lai"
+                                                >
+                                                  Xem Biên Lai
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="inline-flex flex-col items-center justify-center w-full">
+                                                {currentUser.role !== 'VIEWER' ? (
+                                                  <button
+                                                    onClick={() => {
+                                                      setCurrentMonth(item.month);
+                                                      setCurrentYear(item.year);
+                                                      setPayingStudentId(st.studentId);
+                                                      setIsPayModalOpen(true);
+                                                    }}
+                                                    className="flex flex-col items-center justify-center p-1 bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:border-rose-300 text-rose-800 rounded min-w-[80px] w-full transition cursor-pointer"
+                                                  >
+                                                    <span className="text-[10px] font-bold">Chưa nộp</span>
+                                                    <span className="text-[8px] underline text-rose-600 mt-0.5 font-semibold">Thu đóng</span>
+                                                  </button>
+                                                ) : (
+                                                  <span className="inline-block px-2.5 py-1 bg-gray-50 border border-gray-100 text-gray-400 rounded text-[9.5px]">
+                                                    Chưa nộp
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+              {/* ==============================================================
+                  MODULE 4: STUDENT MANAGEMENT SCREEN
+                  ============================================================== */}
+              {activeTab === 'students' && (
+                <div className="space-y-4">
+                  {/* Header page student control */}
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h1 className="text-xl font-bold text-gray-900 tracking-tight">Hồ Sơ Danh Sách Học Viên</h1>
+                      <p className="text-xs text-gray-500 mt-1">Cập nhật hồ sơ sỹ số, thông tin cha mẹ, chiết khấu phần trăm ưu đãi và địa chỉ nhà học viên.</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handleExportStudents}
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/70 transition cursor-pointer"
+                      >
+                        <Download className="h-4 w-4" /> Xuất Excel / CSV
+                      </button>
+
+                      {currentUser.role !== 'VIEWER' && (
+                        <button
+                          onClick={() => {
+                            setEditingStudent(null);
+                            setIsStudentModalOpen(true);
+                          }}
+                          className="flex items-center gap-1 bg-emerald-600 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg hover:bg-emerald-700 transition cursor-pointer shadow-xs shadow-emerald-200"
+                        >
+                          <Plus className="h-4 w-4" /> Ghi danh học viên
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Filters and search blocks */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-gray-100 bg-white p-4 shadow-2xs">
+                    {/* Search student input */}
+                    <div className="relative sm:col-span-3">
+                      <Search className="absolute top-2.5 left-3 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm võ sinh, nickname, SĐT phụ huynh, SĐT võ sinh..."
+                        value={searchStudent}
+                        onChange={(e) => setSearchStudent(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 pl-9 pr-4 text-xs focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Status student selector */}
+                    <select
+                      value={statusFilterStudent}
+                      onChange={(e) => setStatusFilterStudent(e.target.value)}
+                      className="rounded-lg border border-gray-200 bg-gray-50/50 px-3.5 py-1.5 text-xs text-gray-700 focus:border-emerald-500 focus:outline-none font-medium"
+                    >
+                      <option value="Active">Đang đi học (Active)</option>
+                      <option value="Inactive">Nghỉ tạm thời (Inactive)</option>
+                      <option value="Archived">Đã lưu trữ (Archived / Soft delete)</option>
+                    </select>
+                  </div>
+
+                  {/* Student list table container */}
+                  <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left text-gray-600">
+                        <thead className="bg-[#f0f9f3] text-[10px] uppercase font-bold text-[#14532d] border-b border-gray-100">
+                          <tr>
+                            <th className="px-4 py-3">Danh xưng ID</th>
+                            <th className="px-4 py-3">Họ và Tên Võ Sinh</th>
+                            <th className="px-4 py-3">SĐT Võ Sinh</th>
+                            <th className="px-4 py-3">Phụ huynh & SĐT</th>
+                            <th className="px-4 py-3">Học phí mỗi tháng</th>
+                            <th className="px-4 py-3">Ngày nhập học</th>
+                            <th className="px-4 py-3">Hành động</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {students.filter(s => {
+                            const matchSearch = s.fullName.toLowerCase().includes(searchStudent.toLowerCase()) || 
+                                                s.parentPhone.includes(searchStudent) || 
+                                                (s.phone && s.phone.includes(searchStudent));
+                            const matchStatus = s.activeStatus === statusFilterStudent;
+                            return matchSearch && matchStatus;
+                          }).length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                                Không tìm thấy hồ sơ võ sinh nào khớp với tiêu chuẩn đề ra.
+                              </td>
+                            </tr>
+                          ) : (
+                            students.filter(s => {
+                              const matchSearch = s.fullName.toLowerCase().includes(searchStudent.toLowerCase()) || 
+                                                  s.parentPhone.includes(searchStudent) || 
+                                                  (s.phone && s.phone.includes(searchStudent));
+                              const matchStatus = s.activeStatus === statusFilterStudent;
+                              return matchSearch && matchStatus;
+                            }).map((st) => {
+                              return (
+                                <tr key={st.studentId} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-4 py-3 font-mono text-[10px] text-gray-400 font-bold">{st.studentId}</td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-bold text-gray-950 text-xs">{st.fullName}</p>
+                                    <span className="text-[10px] text-emerald-800 italic">Gọi tên: {st.nickname || 'Không'}</span>
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold text-gray-700">
+                                    {st.phone || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-semibold text-gray-700">{st.parentName}</p>
+                                    <span className="text-[10px] text-gray-400 font-bold">{st.parentPhone}</span>
+                                  </td>
+                                  <td className="px-4 py-3 font-extrabold text-[#111827]">{formatVND(st.tuitionFee)}</td>
+                                  <td className="px-4 py-3 text-gray-400 font-mono">{st.enrollmentDate}</td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        onClick={() => {
+                                          setEditingStudent(st);
+                                          setIsStudentModalOpen(true);
+                                        }}
+                                        className="rounded border border-gray-200 bg-white p-1 text-gray-500 hover:text-emerald-700 cursor-pointer"
+                                        title="Chỉnh hồ sơ học sinh"
+                                      >
+                                        <Edit className="h-3.5 w-3.5" />
+                                      </button>
+                                      
+                                      {currentUser.role !== 'VIEWER' && st.activeStatus === 'Active' && (
+                                        <button
+                                          onClick={() => handleArchiveStudent(st)}
+                                          className="rounded border border-red-100 bg-red-50/50 p-1 text-red-500 hover:bg-rose-100 cursor-pointer"
+                                          title="Tạm ngừng học"
+                                        >
+                                          <UserMinus className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Add Student Modal dialog Form */}
+                  {isStudentModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-xs">
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="w-full max-w-lg rounded-xl bg-white shadow-xl overflow-hidden border border-emerald-100"
+                      >
+                        <div className="flex items-center justify-between border-b border-gray-100 bg-emerald-50 px-5 py-3.5">
+                          <span className="font-bold text-xs uppercase tracking-wider text-emerald-950">
+                            {editingStudent ? 'Cập nhật hồ sơ võ sinh' : 'Ghi danh võ sinh mới'}
+                          </span>
+                          <button onClick={() => setIsStudentModalOpen(false)} className="rounded-full p-1 text-emerald-700 hover:bg-emerald-100 font-bold">
+                            <X className="h-4.5 w-4.5" />
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleSaveStudent} className="p-5 space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Họ và Tên võ sinh</label>
+                              <input
+                                type="text"
+                                name="fullName"
+                                required
+                                placeholder="Ví dụ: Nguyễn Văn Hải"
+                                defaultValue={editingStudent?.fullName || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Biệt danh / Gọi tên</label>
+                              <input
+                                type="text"
+                                name="nickname"
+                                placeholder="Ví dụ: Hải Nguyễn"
+                                defaultValue={editingStudent?.nickname || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1 col-span-2">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày tháng năm sinh</label>
+                              <input
+                                type="date"
+                                name="dateOfBirth"
+                                required
+                                defaultValue={editingStudent?.dateOfBirth || '2015-01-01'}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Giới tính võ sinh</label>
+                              <select
+                                name="gender"
+                                defaultValue={editingStudent?.gender || 'Male'}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs focus:border-emerald-500 focus:outline-none font-semibold text-gray-700"
+                              >
+                                <option value="Male">Nam (Male)</option>
+                                <option value="Female">Nữ (Female)</option>
+                                <option value="Other">Khác</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Số điện thoại học viên</label>
+                              <input
+                                type="text"
+                                name="phone"
+                                placeholder="Ví dụ: 0987333444"
+                                defaultValue={editingStudent?.phone || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">SĐT di động Phụ huynh</label>
+                              <input
+                                type="text"
+                                name="parentPhone"
+                                required
+                                placeholder="Ví dụ: 0987111222"
+                                defaultValue={editingStudent?.parentPhone || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Họ tên phụ mẫu bảo hộ</label>
+                              <input
+                                type="text"
+                                name="parentName"
+                                required
+                                placeholder="Ví dụ: Nguyễn Minh Hùng"
+                                defaultValue={editingStudent?.parentName || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Email cha mẹ báo học tập</label>
+                              <input
+                                type="email"
+                                name="email"
+                                placeholder="vui_long_nhap_email@gmail.com"
+                                defaultValue={editingStudent?.email || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1 col-span-2">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Địa chỉ nhà võ sinh</label>
+                              <input
+                                type="text"
+                                name="address"
+                                required
+                                placeholder="Số nhà, ngõ, nẻo..."
+                                defaultValue={editingStudent?.address || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1 font-sans">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Học phí mỗi tháng (VND)</label>
+                              <input
+                                type="number"
+                                name="tuitionFee"
+                                required
+                                placeholder="Ví dụ: 1500000"
+                                defaultValue={editingStudent?.tuitionFee || config.defaultTuitionFee}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Ghi chú</label>
+                            <textarea
+                              name="note"
+                              rows={2}
+                              defaultValue={editingStudent?.note || ''}
+                              placeholder="Trình độ khởi đầu, thể trạng năng khiếu, ghi chú khác..."
+                              className="w-full rounded-lg border border-gray-200 bg-gray-50/50 p-2 text-xs focus:border-emerald-500 focus:outline-none"
+                            ></textarea>
+                          </div>
+
+                          <input type="hidden" name="activeStatus" defaultValue={editingStudent?.activeStatus || 'Active'} />
+
+                          <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsStudentModalOpen(false);
+                                setEditingStudent(null);
+                              }}
+                              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                            >
+                              Hủy bỏ tuyển sinh
+                            </button>
+                            <button
+                              type="submit"
+                              className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
+                            >
+                              Hoàn thành đăng ký
+                            </button>
+                          </div>
+                        </form>
+                      </motion.div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ==============================================================
+                  MODULE 5: TUITION MANAGEMENT SCREEN
+                  ============================================================== */}
+              {activeTab === 'tuition' && (
+                <div className="space-y-4">
+                  {/* Page header */}
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h1 className="text-xl font-bold text-gray-900 tracking-tight">Sổ Theo Dõi Học Phí Chi Tiết</h1>
+                      <p className="text-xs text-gray-500 mt-1">Hệ thống tạo hạch toán học phí hàng tháng tự động. Thu tiền mặt hoặc ngân hàng tiện lợi.</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handleExportTuitionReport}
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/70 transition cursor-pointer shadow-2xs"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" /> Xuất bảng kê (Học phí)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Billing table details */}
+                  <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left text-gray-600">
+                        <thead className="bg-[#f0f9f3] text-[10px] uppercase font-bold text-[#14532d] border-b border-gray-100">
+                          <tr>
+                            <th className="px-4 py-3.5">Mã sỹ sớ</th>
+                            <th className="px-4 py-3.5">Học sinh đăng ký</th>
+                            <th className="px-4 py-3.5">Phụ huynh liên lạc</th>
+                            <th className="px-4 py-3.5">Nghĩa vụ học phí</th>
+                            <th className="px-4 py-3.5">Biên Lai hóa đơn</th>
+                            <th className="px-4 py-3.5">Trạng thái thu phí</th>
+                            <th className="px-4 py-3.5 text-right">Thao tác thu đóng</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {payments.filter(p => p.month === currentMonth && p.year === currentYear).length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                                Chưa có hồ sơ nghĩa vụ học phí khởi tạo cho tháng này.
+                              </td>
+                            </tr>
+                          ) : (
+                            payments.filter(p => p.month === currentMonth && p.year === currentYear).map((pay) => {
+                              const stud = students.find(s => s.studentId === pay.studentId);
+                              
+                              return (
+                                <tr key={pay.paymentId} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-4 py-3.5 font-mono text-[10px] text-gray-400">{pay.paymentId}</td>
+                                  <td className="px-4 py-3.5">
+                                    <p className="font-bold text-gray-900 leading-tight">{stud ? stud.fullName : 'Học viên ẩn danh'}</p>
+                                    <span className="text-[10px] text-gray-400 font-mono italic">Mã: {pay.studentId}</span>
+                                  </td>
+                                  <td className="px-4 py-3.5">
+                                    <p className="text-gray-700 font-semibold">{stud ? stud.parentName : 'Không có'}</p>
+                                    <span className="text-[10px] text-gray-400 font-bold">{stud ? stud.parentPhone : 'N/A'}</span>
+                                  </td>
+                                  <td className="px-4 py-3.5 font-extrabold text-emerald-900">{formatVND(pay.amount)}</td>
+                                  <td className="px-4 py-3.5">
+                                    {pay.paidStatus === 'Paid' ? (
+                                      <div>
+                                        <p className="font-mono text-[10.5px] font-black text-gray-800 bg-[#eefaf2] px-1 border border-emerald-100 rounded w-fit">{pay.receiptNo}</p>
+                                        <span className="text-[9px] text-gray-400 block pt-0.5">Ngày nộp: {pay.paidDate}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 text-[10px] italic">Chờ xuất phiếu...</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3.5 select-none">
+                                    <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-extrabold ${pay.paidStatus === 'Paid' ? 'bg-[#e0ffd5] text-[#1c640e]' : 'bg-red-100 text-[#a31a1a] pulse-active'}`}>
+                                      {pay.paidStatus === 'Paid' ? 'ĐÃ ĐÓNG SỔ (Paid)' : 'CHƯA ĐÓNG'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {pay.paidStatus === 'Paid' ? (
+                                        <>
+                                          <button
+                                            onClick={() => {
+                                              setReceiptStudent(stud || null);
+                                              setActiveReceiptPayment(pay);
+                                            }}
+                                            className="rounded font-bold bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border-emerald-100 border text-[10px] px-2.5 py-1 cursor-pointer"
+                                            title="Xem hồ sơ / In biên lai"
+                                          >
+                                            In Biên Lai (Receipt)
+                                          </button>
+                                          
+                                          {currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' ? (
+                                            <button
+                                              onClick={() => handleMarkUnpaid(pay)}
+                                              className="p-1 rounded bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-[10px] cursor-pointer"
+                                              title="Hủy thanh toán / Reset"
+                                            >
+                                              Hủy Đóng
+                                            </button>
+                                          ) : null}
+                                        </>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            if (isPeriodLocked) {
+                                              alert('Kỳ hạch toán này hiện đang KHÓA SỔ. Mở khóa Điểm neo trước!');
+                                              return;
+                                            }
+                                            setPayingStudentId(pay.studentId);
+                                            setIsPayModalOpen(true);
+                                          }}
+                                          disabled={isPeriodLocked || currentUser.role === 'VIEWER' || currentUser.role === 'STAFF'}
+                                          className="rounded font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] px-3 py-1 cursor-pointer disabled:opacity-50"
+                                        >
+                                          Nhận Đóng Học Phí
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Mark Paid Detailed popup Dialogue Form */}
+                  {isPayModalOpen && payingStudentId && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-xs">
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="w-full max-w-sm rounded-xl bg-white border border-emerald-100 shadow-xl overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between bg-emerald-50 border-b border-gray-100 px-5 py-3.5">
+                          <span className="font-bold text-xs uppercase tracking-wider text-emerald-950">Biểu mẫu thu Ngũ Quỹ học phí</span>
+                          <button onClick={() => {
+                            setIsPayModalOpen(false);
+                            setPayingStudentId(null);
+                          }} className="text-emerald-800 rounded-full p-1 hover:bg-emerald-100 font-bold">
+                            <X className="h-4.5 w-4.5" />
+                          </button>
+                        </div>
+
+                        {(() => {
+                          const stdMatch = students.find(s => s.studentId === payingStudentId)!;
+                          const clMatch = classes.find(c => c.classId === stdMatch.classId);
+                          return (
+                            <form onSubmit={handleMarkPaidSubmit} className="p-5 space-y-4">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase">Võ sinh nộp học phí</label>
+                                <p className="text-xs font-bold text-gray-900">{stdMatch.fullName} ({stdMatch.nickname || 'Không biệt danh'})</p>
+                                <p className="text-[10px] text-gray-400 font-semibold">{clMatch?.className || 'Lớp ẩn'} • Học phí: {formatVND(stdMatch.tuitionFee)}</p>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Số học phí thực đóng (VNĐ)</label>
+                                <input
+                                  type="number"
+                                  name="paidAmount"
+                                  required
+                                  defaultValue={stdMatch.tuitionFee}
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-extrabold text-emerald-900 focus:border-emerald-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày thu tiền nộp</label>
+                                <input
+                                  type="date"
+                                  name="paidDate"
+                                  required
+                                  defaultValue={new Date().toISOString().substring(0, 10)}
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Nội dung chi đóng / Sổ ghi biên lai</label>
+                                <input
+                                  type="text"
+                                  name="note"
+                                  placeholder="Ví dụ: Chuyển khoản Techcombank VP"
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase">Nhân viên thu ngân lập phiếu</label>
+                                <input
+                                  type="text"
+                                  name="collectedBy"
+                                  required
+                                  defaultValue={currentUser.fullName}
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-4">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsPayModalOpen(false);
+                                    setPayingStudentId(null);
+                                  }}
+                                  className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                                >
+                                  Hủy đóng
+                                </button>
+                                <button
+                                  type="submit"
+                                  className="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
+                                >
+                                  Xác nhận thu nộp
+                                </button>
+                              </div>
+                            </form>
+                          );
+                        })()}
+                      </motion.div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ==============================================================
+                  MODULE 7: ANNOUNCEMENTS OUTLINE BOARD
+                  ============================================================== */}
+              {activeTab === 'announcements' && (
+                <AnnouncementSection
+                  announcements={announcements}
+                  userRole={currentUser.role}
+                  currentUserName={currentUser.fullName}
+                  onAddAnnouncement={handleAddNewAnnouncement}
+                  onUpdateAnnouncement={handleUpdateAnnouncement}
+                  onDeleteAnnouncement={handleDeleteAnnouncement}
+                />
+              )}
+
+              {/* ==============================================================
+                  MODULE 8: AUDIT HISTORIES TRACKING VIEW
+                  ============================================================== */}
+              {activeTab === 'audit' && (
+                <AuditLogsView logs={auditLogs} />
+              )}
+
+              {/* ==============================================================
+                  MODULE 10 & 28: CONFIGURATION PAGE & INSTANT TEST USER SWAP
+                  ============================================================== */}
+              {activeTab === 'config' && (
+                <ConfigSettings
+                  config={config}
+                  users={MOCK_USERS}
+                  userRole={currentUser.role}
+                  currentUser={currentUser.username}
+                  onUpdateConfig={handleUpdateConfig}
+                  onSwitchUser={handleSwitchUser}
+                />
+              )}
+
+            </motion.div>
+          </AnimatePresence>
+        </section>
+      </main>
+
+      {/* ----------------- GLOBAL EMBED RECEIPT EXPORT VISUALIZER ----------------- */}
+      <AnimatePresence>
+        {activeReceiptPayment && receiptStudent && (
+          <ReceiptModal
+            isOpen={!!activeReceiptPayment}
+            onClose={() => {
+              setActiveReceiptPayment(null);
+              setReceiptStudent(null);
+            }}
+            payment={activeReceiptPayment}
+            student={receiptStudent}
+            klass={classes.find(c => c.classId === activeReceiptPayment.classId)}
+            config={config}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
