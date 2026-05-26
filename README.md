@@ -1,4 +1,4 @@
-# 🥋 WINGCHUN BÌNH TÂN — HỆ THỐNG QUẢN LÝ HỌC PHÍ
+# 🥋 VXQ BÌNH TÂN
 
 > **Đường link chạy ứng dụng trực tiếp:**  
 > 👉 [**https://thuyetkrb.github.io/vxq_bt/**](https://thuyetkrb.github.io/vxq_bt/)
