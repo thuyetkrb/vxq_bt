@@ -5,11 +5,13 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -27,11 +29,10 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22 # Sử dụng Node.js 22 mới và ổn định nhất, không bị cảnh báo lỗi thời
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm install # Thay bằng lệnh cài đặt chuẩn, không bắt buộc phải có file lock
 
       - name: Build
         run: npm run build
