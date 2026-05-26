@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Class, Student, TuitionPayment, TeacherTransfer, Announcement, AuditLog, Baseline, AppConfig, User } from './types';
+import { Class, Student, TuitionPayment, TeacherTransfer, Announcement, AuditLog, Baseline, AppConfig, User, BankTransfer } from './types';
 
 export const MOCK_USERS: User[] = [
   { username: 'superadmin', fullName: 'Trần Minh Đức', role: 'SUPER_ADMIN', isActive: true },
@@ -453,3 +453,29 @@ export const INITIAL_BASELINES: Baseline[] = [
     status: 'LOCKED'
   }
 ];
+
+export const INITIAL_BANK_TRANSFERS: BankTransfer[] = [
+  {
+    transferId: 'TRF-001',
+    studentId: 'ST-2601',
+    month: 5,
+    year: 2026,
+    transferDate: '2026-05-12',
+    amount: 1500000,
+    note: 'Chuyen khoan hoc phi T5 lop Vinh Xuan Co Ban - Tran Dai Nghia',
+    createdBy: 'admin',
+    createdAt: '2026-05-12T09:30:00Z'
+  },
+  {
+    transferId: 'TRF-002',
+    studentId: 'ST-2602',
+    month: 5,
+    year: 2026,
+    transferDate: '2026-05-15',
+    amount: 2250000,
+    note: 'Dong hoc phi T5 va ung ho vo quan - Phung Hoang Thuan',
+    createdBy: 'superadmin',
+    createdAt: '2026-05-15T14:45:00Z'
+  }
+];
+

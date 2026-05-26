@@ -75,6 +75,18 @@ export interface TeacherTransfer {
   createdAt: string;
 }
 
+export interface BankTransfer {
+  transferId: string;
+  studentId?: string; // Link to a student
+  month: number;
+  year: number;
+  transferDate: string; // YYYY-MM-DD
+  amount: number;
+  note: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface Announcement {
   announcementId: string;
   title: string;

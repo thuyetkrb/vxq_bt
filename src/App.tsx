@@ -14,6 +14,7 @@ import {
   History,
   Settings,
   Menu,
+  Landmark,
   X,
   Plus,
   Search,
@@ -51,7 +52,8 @@ import {
   Baseline,
   AppConfig,
   User,
-  UserRole
+  UserRole,
+  BankTransfer
 } from './types';
 
 import {
@@ -63,7 +65,8 @@ import {
   INITIAL_TRANSFERS,
   INITIAL_ANNOUNCEMENTS,
   INITIAL_AUDIT_LOGS,
-  INITIAL_BASELINES
+  INITIAL_BASELINES,
+  INITIAL_BANK_TRANSFERS
 } from './initialData';
 
 import { formatVND, exportToCSV, getMonthName, buildFilename } from './utils';
@@ -104,6 +107,7 @@ import ReceiptModal from './components/ReceiptModal';
 import AuditLogsView from './components/AuditLogsView';
 import AnnouncementSection from './components/AnnouncementSection';
 import ConfigSettings from './components/ConfigSettings';
+import BankTransferView from './components/BankTransferView';
 
 export default function App() {
   // Mobile Navigation Drawer Toggle
@@ -111,7 +115,7 @@ export default function App() {
   
   // Active Sidebar Tab Tracker
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'students' | 'tuition' | 'announcements' | 'audit' | 'config'
+    'dashboard' | 'students' | 'tuition' | 'announcements' | 'audit' | 'config' | 'bank_transfers'
   >('dashboard');
 
   // Accounts list state with Local Storage persistence
@@ -164,6 +168,7 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>([]);
   const [payments, setPayments] = useState<TuitionPayment[]>([]);
   const [transfers, setTransfers] = useState<TeacherTransfer[]>([]);
+  const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [baselines, setBaselines] = useState<Baseline[]>([]);
@@ -239,6 +244,14 @@ export default function App() {
       localStorage.setItem('mec_transfers', JSON.stringify(INITIAL_TRANSFERS));
     }
 
+    // Hydro bank transfers
+    const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
+    if (lcBankTransfers) setBankTransfers(JSON.parse(lcBankTransfers));
+    else {
+      setBankTransfers(INITIAL_BANK_TRANSFERS);
+      localStorage.setItem('mec_bank_transfers', JSON.stringify(INITIAL_BANK_TRANSFERS));
+    }
+
     // Hydro announcements
     const lcAnns = localStorage.getItem('mec_announcements');
     if (lcAnns) setAnnouncements(JSON.parse(lcAnns));
@@ -285,7 +298,7 @@ export default function App() {
       }
     } else {
       const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-      if (!isAdmin && (activeTab === 'config' || activeTab === 'audit')) {
+      if (!isAdmin && (activeTab === 'config' || activeTab === 'audit' || activeTab === 'bank_transfers')) {
         setActiveTab('dashboard');
       }
     }
@@ -775,6 +788,38 @@ export default function App() {
     appendAuditLog('TRANSFER', xferId, 'CREATE', '', JSON.stringify(fullXfer));
   };
 
+  const handleAddBankTransfer = (newTransfer: Omit<BankTransfer, 'transferId' | 'createdAt'>) => {
+    const trfId = `BT-${Date.now().toString().substring(8)}`;
+    const fullTrf: BankTransfer = {
+      ...newTransfer,
+      transferId: trfId,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [fullTrf, ...bankTransfers];
+    setBankTransfers(updated);
+    updateLocalStorage('mec_bank_transfers', updated);
+
+    appendAuditLog('TRANSFER', trfId, 'CREATE', '', `Ghi nhận chuyển khoản: ${newTransfer.amount}đ cho T.${newTransfer.month}/${newTransfer.year}`);
+  };
+
+  const handleUpdateBankTransfer = (updatedTrf: BankTransfer) => {
+    const oldVal = JSON.stringify(bankTransfers.find(t => t.transferId === updatedTrf.transferId) || '');
+    const updated = bankTransfers.map(t => t.transferId === updatedTrf.transferId ? updatedTrf : t);
+    setBankTransfers(updated);
+    updateLocalStorage('mec_bank_transfers', updated);
+
+    appendAuditLog('TRANSFER', updatedTrf.transferId, 'UPDATE', oldVal, JSON.stringify(updatedTrf));
+  };
+
+  const handleDeleteBankTransfer = (trfId: string) => {
+    const oldVal = JSON.stringify(bankTransfers.find(t => t.transferId === trfId) || '');
+    const updated = bankTransfers.filter(t => t.transferId !== trfId);
+    setBankTransfers(updated);
+    updateLocalStorage('mec_bank_transfers', updated);
+
+    appendAuditLog('TRANSFER', trfId, 'DELETE', oldVal, 'Xóa bản ghi nhận chuyển khoản khỏi sổ sách');
+  };
+
   const handleCreateBaseline = (m: number, y: number) => {
     const freshId = `BASE-${y}${String(m).padStart(2, '0')}`;
     const activeStudentsCountObj = students.filter(s => s.activeStatus === 'Active').length;
@@ -930,6 +975,11 @@ export default function App() {
   const currentCollectedAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
   const currentUnpaidAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').reduce((sum, p) => sum + p.amount, 0);
 
+  // Bank transfer metrics
+  const currentBankTransferSum = bankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).reduce((sum, t) => sum + t.amount, 0);
+  const currentMonthTotalTuition = currentCollectedAmountSum + currentUnpaidAmountSum;
+  const currentMonthRemaining = currentMonthTotalTuition - currentBankTransferSum;
+
   const currentTransferredTotal = transfers.filter(t => t.month === currentMonth && t.year === currentYear).reduce((sum, t) => sum + t.transferAmount, 0);
   const currentRemainingQuo = currentCollectedAmountSum - currentTransferredTotal;
 
@@ -979,6 +1029,7 @@ export default function App() {
             ] : []),
             { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone },
             ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
+              { id: 'bank_transfers', label: 'Chuyển Khoản', icon: Landmark },
               { id: 'config', label: 'Cấu Hình', icon: Settings },
               { id: 'audit', label: 'Lịch sử', icon: History }
             ] : [])
@@ -1166,42 +1217,68 @@ export default function App() {
                   </div>
 
                   {/* Top Simple Counters Grid */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className={`grid grid-cols-2 gap-2.5 ${isLoggedIn ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
                     {/* Stat Active Students */}
-                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                    <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                       <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Võ sinh đang hoạt động</p>
-                        <h3 className="text-2xl font-black text-emerald-900 mt-1">{students.filter(s => s.activeStatus === 'Active').length} võ sinh</h3>
-                        <p className="text-[10.5px] text-gray-400 mt-1">Sĩ số tích cực tập luyện thường kỳ</p>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Sĩ số hoạt động</p>
+                        <h3 className="text-sm font-extrabold text-emerald-950 mt-0.5">{students.filter(s => s.activeStatus === 'Active').length} võ sinh</h3>
+                        <p className="text-[8.5px] text-gray-400 mt-0.5">Sỹ số tích cực</p>
                       </div>
-                      <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold shrink-0">
-                        <Users className="h-5 w-5" />
+                      <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                        <Users className="h-4 w-4" />
                       </div>
                     </div>
 
                     {isLoggedIn ? (
                       <>
                         {/* Stat Total Collected in CURRENT month */}
-                        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                           <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Học phí thu tháng {currentMonth}</p>
-                            <h3 className="text-2xl font-black text-emerald-950 mt-1">{formatVND(currentCollectedAmountSum)}</h3>
-                            <p className="text-[10.5px] text-emerald-600 font-bold mt-1">Đã hoàn tất: {paidCurrentCount} võ sinh</p>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Đã thu tháng {currentMonth}</p>
+                            <h3 className="text-sm font-black text-emerald-950 mt-0.5">{formatVND(currentCollectedAmountSum)}</h3>
+                            <p className="text-[8.5px] text-emerald-600 font-bold mt-0.5 font-sans">Đã đóng: {paidCurrentCount} võ sinh</p>
                           </div>
-                          <div className="h-12 w-12 rounded-full bg-[#f0fdf4] text-emerald-600 flex items-center justify-center shrink-0">
-                            <CheckCircle className="h-5 w-5" />
+                          <div className="h-8 w-8 rounded-lg bg-emerald-50/55 text-emerald-750 flex items-center justify-center shrink-0">
+                            <CheckCircle className="h-4 w-4" />
                           </div>
                         </div>
 
                         {/* Stat Outstanding Unpaid */}
-                        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs flex items-center justify-between">
+                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                           <div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest font-sans">Chờ thu tháng {currentMonth}</p>
-                            <h3 className="text-2xl font-black text-rose-700 mt-1">{formatVND(currentUnpaidAmountSum)}</h3>
-                            <p className="text-[10.5px] text-rose-600 font-bold mt-1">Còn lại: {unpaidCurrentCount} võ sinh</p>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Chờ thu tháng {currentMonth}</p>
+                            <h3 className="text-sm font-black text-rose-700 mt-0.5">{formatVND(currentUnpaidAmountSum)}</h3>
+                            <p className="text-[8.5px] text-rose-600 font-bold mt-0.5 font-sans">Còn lại: {unpaidCurrentCount} võ sinh</p>
                           </div>
-                          <div className="h-12 w-12 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
-                            <XCircle className="h-5 w-5" />
+                          <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
+                            <XCircle className="h-4 w-4" />
+                          </div>
+                        </div>
+
+                        {/* Stat Bank Transfers in CURRENT month */}
+                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Đã chuyển tháng {currentMonth}</p>
+                            <h3 className="text-sm font-black text-sky-850 mt-0.5">{formatVND(currentBankTransferSum)}</h3>
+                            <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans">Hạch toán chuyển khoản</p>
+                          </div>
+                          <div className="h-8 w-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
+                            <Landmark className="h-4 w-4" />
+                          </div>
+                        </div>
+
+                        {/* Stat Remaining Current month */}
+                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                          <div>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Còn lại tháng {currentMonth}</p>
+                            <h3 className={`text-sm font-black mt-0.5 ${currentMonthRemaining > 0 ? 'text-rose-650' : 'text-emerald-850'}`}>
+                              {formatVND(currentMonthRemaining)}
+                            </h3>
+                            <p className="text-[8.5px] text-gray-400 mt-0.5 font-sans">Số dư cần thu nợ</p>
+                          </div>
+                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${currentMonthRemaining > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-850'}`}>
+                            <CircleDollarSign className="h-4 w-4" />
                           </div>
                         </div>
                       </>
@@ -1433,6 +1510,110 @@ export default function App() {
                                 })
                               )}
                             </tbody>
+                            <tfoot className="bg-emerald-50/15 border-t border-gray-200 font-bold select-none text-gray-800">
+                              {/* Row 1: Tổng học phí theo tháng */}
+                              <tr className="bg-slate-50/50 border-b border-gray-100/80">
+                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
+                                  Tổng học phí theo tháng
+                                </td>
+                                {computedRange.map(item => {
+                                  const colActiveStudents = students.filter(s => {
+                                    if (s.activeStatus !== 'Active') return false;
+                                    if (s.enrollmentDate) {
+                                      const parts = s.enrollmentDate.split('-');
+                                      if (parts.length >= 2) {
+                                        const enrollYear = parseInt(parts[0], 10);
+                                        const enrollMonth = parseInt(parts[1], 10);
+                                        if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
+                                          if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
+                                            return false;
+                                          }
+                                        }
+                                      }
+                                    }
+                                    return true;
+                                  });
+                                  const colTotalTuitionExpected = colActiveStudents.reduce((sum, st) => {
+                                    const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
+                                    const isCellExempt = cellPay?.paidStatus === 'Exempted';
+                                    if (isCellExempt) return sum;
+                                    const amt = cellPay ? cellPay.amount : st.tuitionFee;
+                                    return sum + amt;
+                                  }, 0);
+
+                                  return (
+                                    <td key={`total-tuition-${item.month}-${item.year}`} className="px-2 py-3 text-center border-r border-gray-100 font-extrabold text-emerald-900 font-mono">
+                                      {formatVND(colTotalTuitionExpected)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+
+                              {/* Row 2: Đã chuyển khoản */}
+                              <tr className="bg-sky-50/10 border-b border-gray-100/80">
+                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-sky-950 uppercase tracking-wide">
+                                  Đã chuyển khoản
+                                </td>
+                                {computedRange.map(item => {
+                                  const colBankTransferSum = bankTransfers
+                                    .filter(t => t.month === item.month && t.year === item.year)
+                                    .reduce((sum, t) => sum + t.amount, 0);
+
+                                  return (
+                                    <td key={`bank-trf-${item.month}-${item.year}`} className="px-2 py-3 text-center border-r border-gray-100 font-extrabold text-sky-700 font-mono">
+                                      {formatVND(colBankTransferSum)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+
+                              {/* Row 3: Còn lại */}
+                              <tr className="bg-rose-50/10 border-b border-gray-100/80">
+                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-rose-950 uppercase tracking-wide">
+                                  Còn lại
+                                </td>
+                                {computedRange.map(item => {
+                                  const colActiveStudents = students.filter(s => {
+                                    if (s.activeStatus !== 'Active') return false;
+                                    if (s.enrollmentDate) {
+                                      const parts = s.enrollmentDate.split('-');
+                                      if (parts.length >= 2) {
+                                        const enrollYear = parseInt(parts[0], 10);
+                                        const enrollMonth = parseInt(parts[1], 10);
+                                        if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
+                                          if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
+                                            return false;
+                                          }
+                                        }
+                                      }
+                                    }
+                                    return true;
+                                  });
+                                  const colTotalTuitionExpected = colActiveStudents.reduce((sum, st) => {
+                                    const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
+                                    const isCellExempt = cellPay?.paidStatus === 'Exempted';
+                                    if (isCellExempt) return sum;
+                                    const amt = cellPay ? cellPay.amount : st.tuitionFee;
+                                    return sum + amt;
+                                  }, 0);
+
+                                  const colBankTransferSum = bankTransfers
+                                    .filter(t => t.month === item.month && t.year === item.year)
+                                    .reduce((sum, t) => sum + t.amount, 0);
+
+                                  const colRemaining = colTotalTuitionExpected - colBankTransferSum;
+
+                                  return (
+                                    <td 
+                                      key={`rem-${item.month}-${item.year}`} 
+                                      className={`px-2 py-3 text-center border-r border-gray-100 font-extrabold font-mono ${colRemaining > 0 ? 'text-rose-600' : 'text-emerald-700'}`}
+                                    >
+                                      {formatVND(colRemaining)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            </tfoot>
                           </table>
                         );
                       })()}
@@ -1932,6 +2113,40 @@ export default function App() {
                             })
                           )}
                         </tbody>
+                        <tfoot className="bg-emerald-50/15 border-t border-gray-200 font-bold select-none text-gray-800">
+                          {/* Row 1: Tổng học phí theo tháng */}
+                          <tr className="bg-slate-50/50 border-b border-gray-100/80">
+                            <td colSpan={3} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
+                              Tổng học phí theo tháng
+                            </td>
+                            <td className="px-4 py-3 font-extrabold text-emerald-900 font-mono text-[12.5px]">
+                              {formatVND(currentMonthTotalTuition)}
+                            </td>
+                            <td colSpan={3} className="px-4 py-3"></td>
+                          </tr>
+
+                          {/* Row 2: Đã chuyển khoản */}
+                          <tr className="bg-sky-50/10 border-b border-gray-100/80">
+                            <td colSpan={3} className="px-4 py-3 text-right font-black text-[10px] text-sky-950 uppercase tracking-wide">
+                              Đã chuyển khoản
+                            </td>
+                            <td className="px-4 py-3 font-extrabold text-sky-700 font-mono text-[12.5px]">
+                              {formatVND(currentBankTransferSum)}
+                            </td>
+                            <td colSpan={3} className="px-4 py-3"></td>
+                          </tr>
+
+                          {/* Row 3: Còn lại */}
+                          <tr className="bg-rose-50/10 border-b border-gray-100/80">
+                            <td colSpan={3} className="px-4 py-3 text-right font-black text-[10px] text-rose-950 uppercase tracking-wide">
+                              Còn lại
+                            </td>
+                            <td className={`px-4 py-3 font-extrabold font-mono text-[12.5px] ${currentMonthRemaining > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                              {formatVND(currentMonthRemaining)}
+                            </td>
+                            <td colSpan={3} className="px-4 py-3"></td>
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   </div>
@@ -2093,6 +2308,21 @@ export default function App() {
                   ============================================================== */}
               {activeTab === 'audit' && (
                 <AuditLogsView logs={auditLogs} />
+              )}
+
+              {/* ==============================================================
+                  MODULE 29: RECEIVED BANK TRANSFERS LOG VIEW
+                  ============================================================== */}
+              {activeTab === 'bank_transfers' && (
+                <BankTransferView
+                  transfers={bankTransfers}
+                  students={students}
+                  userRole={currentUser.role}
+                  currentUserName={currentUser.fullName}
+                  onAddTransfer={handleAddBankTransfer}
+                  onUpdateTransfer={handleUpdateBankTransfer}
+                  onDeleteTransfer={handleDeleteBankTransfer}
+                />
               )}
 
               {/* ==============================================================
