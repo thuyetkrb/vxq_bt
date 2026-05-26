@@ -148,6 +148,20 @@ export default function App() {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
   const [isFreeExempt, setIsFreeExempt] = useState(false);
+  const [paidAmountVal, setPaidAmountVal] = useState<string | number>('');
+
+  useEffect(() => {
+    if (isPayModalOpen && payingStudentId) {
+      if (isFreeExempt) {
+        setPaidAmountVal(0);
+      } else {
+        const match = students.find(s => s.studentId === payingStudentId);
+        if (match) {
+          setPaidAmountVal(match.tuitionFee);
+        }
+      }
+    }
+  }, [isPayModalOpen, payingStudentId, isFreeExempt, students]);
 
   // Active Receipt Modal visualization
   const [activeReceiptPayment, setActiveReceiptPayment] = useState<TuitionPayment | null>(null);
@@ -1752,10 +1766,10 @@ export default function App() {
                                   type="number"
                                   name="paidAmount"
                                   required
-                                  value={isFreeExempt ? 0 : undefined}
-                                  defaultValue={isFreeExempt ? 0 : stdMatch.tuitionFee}
+                                  value={paidAmountVal}
+                                  onChange={(e) => setPaidAmountVal(e.target.value)}
                                   disabled={isFreeExempt}
-                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-extrabold text-emerald-900 focus:border-emerald-500 focus:outline-none disabled:opacity-75 disabled:bg-gray-100"
+                                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-extrabold text-emerald-950 focus:border-emerald-500 focus:outline-none disabled:opacity-75 disabled:bg-gray-100"
                                 />
                                 {isFreeExempt && (
                                   <span className="text-[9px] text-emerald-700 font-bold block mt-1">✨ Miễn đóng học phí: Số tiền tự động điều chỉnh về 0đ</span>
