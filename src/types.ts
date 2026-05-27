@@ -10,6 +10,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   isActive: boolean;
+  password?: string;
 }
 
 export interface Class {

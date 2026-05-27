@@ -64,11 +64,12 @@ Thời gian/Tháng học: ${getMonthName(payment.month)} / năm ${payment.year}
 ${isExempt ? 'Học phí thu: 0 VNĐ (Được miễn học phí hoàn toàn)' : `Học phí thu: ${formatVND(payment.amount)}`}
 Trạng thái đóng: ${isExempt ? 'MIỄN GIẢM / CHƯA CẦN THU' : 'ĐÃ THANH TOÁN'}
 Ngày thu phí: ${payment.paidDate || 'N/A'}
+Đơn vị thu: Võ Quán Nam Anh Quang
 Người thực hiện: ${payment.collectedBy || 'N/A'}
 Ghi chú/Lý do: ${payment.note || 'Không có'}
 ${boundary}
 Cảm ơn quý phụ huynh và võ sinh đã đồng hành
-cùng võ quán WINGCHUN BINH TAN!
+cùng võ quán Vịnh Xuân Quyền - Nam Anh Quang!
 ${boundary}`;
 
     const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
@@ -97,7 +98,7 @@ ${boundary}`;
               <Check className="h-4 w-4" />
             </span>
             <span className={`font-semibold ${payment.paidStatus === 'Exempted' ? 'text-cyan-900' : 'text-emerald-900'}`}>
-              {payment.paidStatus === 'Exempted' ? 'Chi tiết ghi nhận miễn học phí' : 'Chi tiết biên lai học phí'}
+              {payment.paidStatus === 'Exempted' ? 'Chi tiết ghi nhận miễn học phí' : 'Vịnh Xuân Quyền - Nam Anh Quang'}
             </span>
           </div>
           <button 
@@ -164,7 +165,11 @@ ${boundary}`;
                 <span className="text-gray-900">{payment.paidDate || 'Hôm nay'}</span>
               </div>
               <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                <span className="text-gray-500">{payment.paidStatus === 'Exempted' ? 'Người phê duyệt miễn học:' : 'Nhân viên thu ngân:'}</span>
+                <span className="text-gray-500">Đơn vị thu:</span>
+                <span className="text-emerald-800 font-extrabold text-[12.5px]">VÕ QUÁN NAM ANH QUANG</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-1.5 align-middle">
+                <span className="text-gray-500">{payment.paidStatus === 'Exempted' ? 'Người phê duyệt miễn học:' : 'Nhân viên thực hiện:'}</span>
                 <span className="text-gray-900 font-medium">{payment.collectedBy || 'Người chỉ định'}</span>
               </div>
               <div className="flex flex-col gap-1 border-b border-gray-100 pb-1.5">
@@ -175,7 +180,7 @@ ${boundary}`;
 
             {/* Foot note */}
             <div className="mt-8 text-center text-[11px] text-gray-400 italic">
-              <p>Hệ thống hỗ trợ võ thuật WINGCHUN BINH TAN</p>
+              <p>Võ Quán Vịnh Xuân Quyền Nam Anh Quang</p>
               <p className="mt-1">Cảm ơn quý phụ huynh và võ sinh đã đồng hành cùng võ quán!</p>
             </div>
           </div>

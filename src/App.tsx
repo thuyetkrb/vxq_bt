@@ -144,7 +144,8 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         const match = list.find(u => u.username === parsed.username);
-        if (match && parsed.password === parsed.username && match.isActive) {
+        const correctPassword = match ? (match.password || match.username) : '';
+        if (match && parsed.password === correctPassword && match.isActive) {
           return match;
         }
       } catch (e) {
@@ -278,8 +279,33 @@ export default function App() {
 
     // Hydro configs
     const lcConfig = localStorage.getItem('mec_config');
-    if (lcConfig) setConfig(JSON.parse(lcConfig));
-    else {
+    if (lcConfig) {
+      try {
+        let parsed = JSON.parse(lcConfig);
+        // Migrate old English center data to Vịnh Xuân Quyền - Nam Anh Quang
+        if (
+          !parsed.centerName ||
+          parsed.centerName.includes('Minh Đức') || 
+          parsed.centerName.includes('MEC') || 
+          parsed.address?.includes('Đường Láng') || 
+          parsed.phone === '0987.654.321' ||
+          parsed.centerName.includes('Bình Tân (Nam Anh Quang)')
+        ) {
+          parsed = {
+            ...parsed,
+            centerName: 'Vịnh Xuân Quyền - Nam Anh Quang',
+            address: 'Khu Mua Sắm Anh Hào, 666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM',
+            phone: '0938 372 286',
+            receiptPrefix: 'VXQ'
+          };
+          localStorage.setItem('mec_config', JSON.stringify(parsed));
+        }
+        setConfig(parsed);
+      } catch (e) {
+        setConfig(INITIAL_CONFIG);
+        localStorage.setItem('mec_config', JSON.stringify(INITIAL_CONFIG));
+      }
+    } else {
       setConfig(INITIAL_CONFIG);
       localStorage.setItem('mec_config', JSON.stringify(INITIAL_CONFIG));
     }
@@ -309,7 +335,8 @@ export default function App() {
     setLoginError('');
     const matchedUser = users.find(u => u.username === loginUsername.trim().toLowerCase());
     
-    if (matchedUser && loginPassword === matchedUser.username) {
+    const correctPassword = matchedUser ? (matchedUser.password || matchedUser.username) : '';
+    if (matchedUser && loginPassword === correctPassword) {
       if (!matchedUser.isActive) {
         setLoginError('Tài khoản này hiện đang bị khóa!');
         return;
@@ -1014,7 +1041,7 @@ export default function App() {
             <GraduationCap className="h-5 w-5 text-white" />
           </span>
           <div>
-            <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">WINGCHUN BÌNH TÂN</span>
+            <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">VXQ BÌNH TÂN</span>
             <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono leading-none block mt-1">Võ Quán Nam Anh Quang</span>
           </div>
         </div>

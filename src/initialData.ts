@@ -13,7 +13,7 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const INITIAL_CONFIG: AppConfig = {
-  centerName: 'Lớp Vịnh Xuân Bình Tân (Nam Anh Quang)',
+  centerName: 'Vịnh Xuân Quyền - Nam Anh Quang',
   address: 'Khu Mua Sắm Anh Hào, 666 Đường Số 1, Bình Hưng Hòa B, Bình Tân, TP.HCM',
   phone: '0938 372 286',
   receiptPrefix: 'VXQ',

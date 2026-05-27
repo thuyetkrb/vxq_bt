@@ -41,6 +41,7 @@ export default function ConfigSettings({
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newFullName, setNewFullName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('STAFF');
   const [newIsActive, setNewIsActive] = useState(true);
   const [userActionError, setUserActionError] = useState('');
@@ -89,6 +90,7 @@ export default function ConfigSettings({
     setEditingUser(null);
     setNewUsername('');
     setNewFullName('');
+    setNewPassword('');
     setNewRole('STAFF');
     setNewIsActive(true);
     setIsAddingUser(true);
@@ -101,6 +103,7 @@ export default function ConfigSettings({
     setEditingUser(u);
     setNewUsername(u.username);
     setNewFullName(u.fullName);
+    setNewPassword(u.password || u.username);
     setNewRole(u.role);
     setNewIsActive(u.isActive);
     setUserActionError('');
@@ -148,24 +151,31 @@ export default function ConfigSettings({
         return;
       }
 
+      const defaultPassword = trimmedUsername;
+      const finalPassword = userRole === 'SUPER_ADMIN' ? (newPassword.trim() || defaultPassword) : defaultPassword;
+
       const newUserItem: User = {
         username: trimmedUsername,
         fullName: trimmedFullName,
         role: newRole,
-        isActive: newIsActive
+        isActive: newIsActive,
+        password: finalPassword
       };
 
       onUpdateUsers([...users, newUserItem]);
-      setUserActionSuccess(`Đã thêm thành công tài khoản ${trimmedFullName} (Mật khẩu: ${trimmedUsername})!`);
+      setUserActionSuccess(`Đã thêm thành công tài khoản ${trimmedFullName} (Mật khẩu: ${finalPassword})!`);
       setIsAddingUser(false);
     } else if (editingUser) {
       const updatedUsers = users.map(u => {
         if (u.username === editingUser.username) {
+          const defaultPassword = u.password || u.username;
+          const finalPassword = userRole === 'SUPER_ADMIN' ? (newPassword.trim() || defaultPassword) : defaultPassword;
           return {
             ...u,
             fullName: trimmedFullName,
             role: newRole,
-            isActive: newIsActive
+            isActive: newIsActive,
+            password: finalPassword
           };
         }
         return u;
@@ -407,6 +417,26 @@ export default function ConfigSettings({
                   </div>
 
                   <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center justify-between">
+                      <span>Mật Khẩu (Password)</span>
+                      {userRole !== 'SUPER_ADMIN' && (
+                        <span className="text-[8px] text-rose-600 bg-rose-50 px-1 py-0.5 rounded font-normal italic lowercase tracking-normal">
+                          Chỉ Super Admin mới sửa được
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      required={isAddingUser}
+                      placeholder={isAddingUser ? "mật khẩu mặc định bằng username" : "Nhập mật khẩu mới"}
+                      disabled={userRole !== 'SUPER_ADMIN'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-250 bg-white py-2 px-3 text-xs font-mono font-bold focus:border-emerald-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-405 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-500 uppercase">Phân Phẩm Vai Trò</label>
                     <select
                       value={newRole}
@@ -458,6 +488,7 @@ export default function ConfigSettings({
                     <tr>
                       <th className="px-4 py-2.5">Trực Bản (Username)</th>
                       <th className="px-4 py-2.5">Họ và Tên</th>
+                      <th className="px-4 py-2.5">Mật Khẩu</th>
                       <th className="px-4 py-2.5">Vai Trò</th>
                       <th className="px-4 py-2.5">Trạng thái</th>
                       {canManageUsers && <th className="px-4 py-2.5 text-center">Thao Tác</th>}
@@ -474,6 +505,11 @@ export default function ConfigSettings({
                             {isSelf && <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-sans text-[8.5px] font-black uppercase">Bạn</span>}
                           </td>
                           <td className="px-4 py-3 font-semibold text-gray-700">{u.fullName}</td>
+                          <td className="px-4 py-3 font-mono text-gray-500 font-bold">
+                            <span className="bg-gray-50 border border-gray-150 px-1.5 py-0.5 rounded text-[11px]">
+                              {u.password || u.username}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 font-bold font-mono text-[10.5px]">
                             <span className={`px-1.5 py-0.5 rounded ${u.role === 'SUPER_ADMIN' ? 'bg-[#f0fdf4] text-emerald-800 border border-emerald-100' : u.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-800' : u.role === 'STAFF' ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-700'}`}>
                               {u.role}
