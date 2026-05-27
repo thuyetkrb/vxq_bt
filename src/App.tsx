@@ -104,7 +104,6 @@ const getMonthRange = (currentM: number, currentY: number, beforeCount: number, 
 
 // Import our modular components
 import ReceiptModal from './components/ReceiptModal';
-import AuditLogsView from './components/AuditLogsView';
 import AnnouncementSection from './components/AnnouncementSection';
 import ConfigSettings from './components/ConfigSettings';
 import BankTransferView from './components/BankTransferView';
@@ -115,7 +114,7 @@ export default function App() {
   
   // Active Sidebar Tab Tracker
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'students' | 'tuition' | 'announcements' | 'audit' | 'config' | 'bank_transfers'
+    'dashboard' | 'students' | 'tuition' | 'announcements' | 'config' | 'bank_transfers'
   >('dashboard');
 
   // Accounts list state with Local Storage persistence
@@ -123,11 +122,17 @@ export default function App() {
     const saved = localStorage.getItem('vxq_users');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (!parsed.some((u: any) => u.username === 'superadmin' && u.fullName === 'thuyethn')) {
+          localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
+          return MOCK_USERS;
+        }
+        return parsed;
       } catch (e) {
         console.error('Error hydrating vxq_users', e);
       }
     }
+    localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
     return MOCK_USERS;
   });
 
@@ -165,14 +170,12 @@ export default function App() {
   const [currentYear, setCurrentYear] = useState<number>(2026);
 
   // States fetched/stored in Local Storage
-  const [classes, setClasses] = useState<Class[]>([]);
+  const [classes, setClasses] = useState<Class[]>(() => INITIAL_CLASSES);
   const [students, setStudents] = useState<Student[]>([]);
   const [payments, setPayments] = useState<TuitionPayment[]>([]);
   const [transfers, setTransfers] = useState<TeacherTransfer[]>([]);
   const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
 
   // CRUD & Search Helper states
@@ -213,28 +216,47 @@ export default function App() {
 
   // Local Storage synchronizer & hydration
   useEffect(() => {
-    // Hydro classes
-    const lcClasses = localStorage.getItem('mec_classes');
-    if (lcClasses) setClasses(JSON.parse(lcClasses));
-    else {
-      setClasses(INITIAL_CLASSES);
-      localStorage.setItem('mec_classes', JSON.stringify(INITIAL_CLASSES));
-    }
-
     // Hydro students
     const lcStudents = localStorage.getItem('mec_students');
-    if (lcStudents) setStudents(JSON.parse(lcStudents));
-    else {
-      setStudents(INITIAL_STUDENTS);
-      localStorage.setItem('mec_students', JSON.stringify(INITIAL_STUDENTS));
+    let useInitialStudents = false;
+    if (lcStudents) {
+      try {
+        const parsed = JSON.parse(lcStudents);
+        if (parsed.some((s: any) => s.studentId && s.studentId.startsWith('STUD-'))) {
+          useInitialStudents = true;
+        } else {
+          setStudents(parsed);
+        }
+      } catch (e) {
+        useInitialStudents = true;
+      }
+    } else {
+      useInitialStudents = true;
     }
 
-    // Hydro payments
-    const lcPayments = localStorage.getItem('mec_payments');
-    if (lcPayments) setPayments(JSON.parse(lcPayments));
-    else {
+    if (useInitialStudents) {
+      setStudents(INITIAL_STUDENTS);
+      localStorage.setItem('mec_students', JSON.stringify(INITIAL_STUDENTS));
       setPayments(INITIAL_PAYMENTS);
       localStorage.setItem('mec_payments', JSON.stringify(INITIAL_PAYMENTS));
+      setBankTransfers(INITIAL_BANK_TRANSFERS);
+      localStorage.setItem('mec_bank_transfers', JSON.stringify(INITIAL_BANK_TRANSFERS));
+    } else {
+      // Hydro payments
+      const lcPayments = localStorage.getItem('mec_payments');
+      if (lcPayments) setPayments(JSON.parse(lcPayments));
+      else {
+        setPayments(INITIAL_PAYMENTS);
+        localStorage.setItem('mec_payments', JSON.stringify(INITIAL_PAYMENTS));
+      }
+
+      // Hydro bank transfers
+      const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
+      if (lcBankTransfers) setBankTransfers(JSON.parse(lcBankTransfers));
+      else {
+        setBankTransfers(INITIAL_BANK_TRANSFERS);
+        localStorage.setItem('mec_bank_transfers', JSON.stringify(INITIAL_BANK_TRANSFERS));
+      }
     }
 
     // Hydro transfers
@@ -245,36 +267,12 @@ export default function App() {
       localStorage.setItem('mec_transfers', JSON.stringify(INITIAL_TRANSFERS));
     }
 
-    // Hydro bank transfers
-    const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
-    if (lcBankTransfers) setBankTransfers(JSON.parse(lcBankTransfers));
-    else {
-      setBankTransfers(INITIAL_BANK_TRANSFERS);
-      localStorage.setItem('mec_bank_transfers', JSON.stringify(INITIAL_BANK_TRANSFERS));
-    }
-
     // Hydro announcements
     const lcAnns = localStorage.getItem('mec_announcements');
     if (lcAnns) setAnnouncements(JSON.parse(lcAnns));
     else {
       setAnnouncements(INITIAL_ANNOUNCEMENTS);
       localStorage.setItem('mec_announcements', JSON.stringify(INITIAL_ANNOUNCEMENTS));
-    }
-
-    // Hydro audit log
-    const lcAudits = localStorage.getItem('mec_audits');
-    if (lcAudits) setAuditLogs(JSON.parse(lcAudits));
-    else {
-      setAuditLogs(INITIAL_AUDIT_LOGS);
-      localStorage.setItem('mec_audits', JSON.stringify(INITIAL_AUDIT_LOGS));
-    }
-
-    // Hydro baselines
-    const lcBaselines = localStorage.getItem('mec_baselines');
-    if (lcBaselines) setBaselines(JSON.parse(lcBaselines));
-    else {
-      setBaselines(INITIAL_BASELINES);
-      localStorage.setItem('mec_baselines', JSON.stringify(INITIAL_BASELINES));
     }
 
     // Hydro configs
@@ -324,7 +322,7 @@ export default function App() {
       }
     } else {
       const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-      if (!isAdmin && (activeTab === 'config' || activeTab === 'audit' || activeTab === 'bank_transfers')) {
+      if (!isAdmin && (activeTab === 'config' || activeTab === 'bank_transfers')) {
         setActiveTab('dashboard');
       }
     }
@@ -375,20 +373,8 @@ export default function App() {
   };
 
   // Helper: Log audit trail to the system
-  const appendAuditLog = (type: AuditLog['entityType'], id: string, action: AuditLog['action'], oldValue: string, newValue: string) => {
-    const freshLog: AuditLog = {
-      auditId: `AUD-${Date.now().toString().substring(7)}`,
-      entityType: type,
-      entityId: id,
-      action: action,
-      oldValue: oldValue,
-      newValue: newValue,
-      modifiedBy: currentUser.fullName,
-      modifiedAt: new Date().toISOString()
-    };
-    const updated = [freshLog, ...auditLogs];
-    setAuditLogs(updated);
-    updateLocalStorage('mec_audits', updated);
+  const appendAuditLog = (type: any, id: string, action: any, oldValue: string, newValue: string) => {
+    // Audit logs disabled per user request
   };
 
   // -------------------------------------------------------------
@@ -847,60 +833,7 @@ export default function App() {
     appendAuditLog('TRANSFER', trfId, 'DELETE', oldVal, 'Xóa bản ghi nhận chuyển khoản khỏi sổ sách');
   };
 
-  const handleCreateBaseline = (m: number, y: number) => {
-    const freshId = `BASE-${y}${String(m).padStart(2, '0')}`;
-    const activeStudentsCountObj = students.filter(s => s.activeStatus === 'Active').length;
-    const collectedPaymentsObj = payments.filter(p => p.month === m && p.year === y && p.paidStatus === 'Paid');
-    const totalCollectedAmountObj = collectedPaymentsObj.reduce((sum, p) => sum + p.amount, 0);
-    const monthTransfersObj = transfers.filter(t => t.month === m && t.year === y);
-    const totalTransferredAmountObj = monthTransfersObj.reduce((sum, t) => sum + t.transferAmount, 0);
 
-    const freshBaseline: Baseline = {
-      baselineId: freshId,
-      month: m,
-      year: y,
-      totalStudents: activeStudentsCountObj,
-      totalCollected: totalCollectedAmountObj,
-      totalTransferred: totalTransferredAmountObj,
-      remainingAmount: totalCollectedAmountObj - totalTransferredAmountObj,
-      snapshotJson: JSON.stringify({
-        students: students.filter(s => s.activeStatus === 'Active'),
-        payments: payments.filter(p => p.month === m && p.year === y),
-        transfers: transfers.filter(t => t.month === m && t.year === y)
-      }),
-      createdBy: currentUser.fullName,
-      createdAt: new Date().toISOString(),
-      status: 'OPEN'
-    };
-
-    const updated = [freshBaseline, ...baselines];
-    setBaselines(updated);
-    updateLocalStorage('mec_baselines', updated);
-
-    appendAuditLog('BASELINE', freshId, 'BASELINE_CREATE', '', `Tạo snapshot chốt toán tháng ${m}/${y}`);
-  };
-
-  const handleLockBaseline = (id: string) => {
-    const target = baselines.find(b => b.baselineId === id);
-    const oldSum = target ? JSON.stringify(target) : '';
-
-    const updated = baselines.map(b => b.baselineId === id ? { ...b, status: 'LOCKED' as const } : b);
-    setBaselines(updated);
-    updateLocalStorage('mec_baselines', updated);
-
-    appendAuditLog('BASELINE', id, 'MONTH_LOCK', oldSum, 'Mã khóa chốt sổ: Trạng thái đóng băng (LOCKED)');
-  };
-
-  const handleUnlockBaseline = (id: string) => {
-    const target = baselines.find(b => b.baselineId === id);
-    const oldSum = target ? JSON.stringify(target) : '';
-
-    const updated = baselines.map(b => b.baselineId === id ? { ...b, status: 'OPEN' as const } : b);
-    setBaselines(updated);
-    updateLocalStorage('mec_baselines', updated);
-
-    appendAuditLog('BASELINE', id, 'MONTH_UNLOCK', oldSum, 'Mở khóa chốt sổ tháng: Trạng thái chỉnh hạch mở (OPEN)');
-  };
 
   const handleUpdateConfig = (newCfg: Partial<AppConfig>) => {
     const oldSum = JSON.stringify(config);
@@ -909,6 +842,37 @@ export default function App() {
     updateLocalStorage('mec_config', updated);
 
     appendAuditLog('CONFIGURATION', 'CENTER_CONFIG', 'UPDATE', oldSum, JSON.stringify(newCfg));
+  };
+
+  const handleSyncImport = (data: {
+    students?: Student[];
+    payments?: TuitionPayment[];
+    bankTransfers?: BankTransfer[];
+    users?: User[];
+    announcements?: Announcement[];
+  }) => {
+    if (data.students) {
+      setStudents(data.students);
+      localStorage.setItem('mec_students', JSON.stringify(data.students));
+    }
+    if (data.payments) {
+      setPayments(data.payments);
+      localStorage.setItem('mec_payments', JSON.stringify(data.payments));
+    }
+    if (data.bankTransfers) {
+      setBankTransfers(data.bankTransfers);
+      localStorage.setItem('mec_bank_transfers', JSON.stringify(data.bankTransfers));
+    }
+    if (data.users) {
+      setUsers(data.users);
+      localStorage.setItem('vxq_users', JSON.stringify(data.users));
+    }
+    if (data.announcements) {
+      setAnnouncements(data.announcements);
+      localStorage.setItem('mec_announcements', JSON.stringify(data.announcements));
+    }
+
+    appendAuditLog('CONFIGURATION', 'GOOGLE_SHEETS_SYNC', 'UPDATE', 'Thao tác kéo dữ liệu từ mây (PULL)', 'Thành công đồng bộ dữ liệu từ Google Sheets');
   };
 
   const handleSwitchUser = (uname: string) => {
@@ -1057,8 +1021,7 @@ export default function App() {
             { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone },
             ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
               { id: 'bank_transfers', label: 'Chuyển Khoản', icon: Landmark },
-              { id: 'config', label: 'Cấu Hình', icon: Settings },
-              { id: 'audit', label: 'Lịch sử', icon: History }
+              { id: 'config', label: 'Cấu Hình', icon: Settings }
             ] : [])
           ].map(item => {
             const Icon = item.icon;
@@ -2199,13 +2162,12 @@ export default function App() {
 
                         {(() => {
                           const stdMatch = students.find(s => s.studentId === payingStudentId)!;
-                          const clMatch = classes.find(c => c.classId === stdMatch.classId);
                           return (
                             <form onSubmit={handleMarkPaidSubmit} className="p-5 space-y-4">
                               <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase">Võ sinh nộp học phí</label>
                                 <p className="text-xs font-bold text-gray-900">{stdMatch.fullName} ({stdMatch.nickname || 'Không biệt danh'})</p>
-                                <p className="text-[10px] text-gray-400 font-semibold">{clMatch?.className || 'Lớp ẩn'} • Học phí gốc: {formatVND(stdMatch.tuitionFee)}</p>
+                                <p className="text-[10px] text-[#0f766e] font-extrabold">📍 {config.centerName} • Học phí gốc: {formatVND(stdMatch.tuitionFee)}</p>
                               </div>
 
                               {/* Lựa chọn Miễn Phí hoặc Đóng học phí */}
@@ -2330,12 +2292,7 @@ export default function App() {
                 />
               )}
 
-              {/* ==============================================================
-                  MODULE 8: AUDIT HISTORIES TRACKING VIEW
-                  ============================================================== */}
-              {activeTab === 'audit' && (
-                <AuditLogsView logs={auditLogs} />
-              )}
+
 
               {/* ==============================================================
                   MODULE 29: RECEIVED BANK TRANSFERS LOG VIEW
@@ -2343,7 +2300,6 @@ export default function App() {
               {activeTab === 'bank_transfers' && (
                 <BankTransferView
                   transfers={bankTransfers}
-                  students={students}
                   userRole={currentUser.role}
                   currentUserName={currentUser.fullName}
                   onAddTransfer={handleAddBankTransfer}
@@ -2364,6 +2320,11 @@ export default function App() {
                   onUpdateConfig={handleUpdateConfig}
                   onSwitchUser={handleSwitchUser}
                   onUpdateUsers={handleUpdateUsers}
+                  students={students}
+                  payments={payments}
+                  bankTransfers={bankTransfers}
+                  announcements={announcements}
+                  onSyncImport={handleSyncImport}
                 />
               )}
 

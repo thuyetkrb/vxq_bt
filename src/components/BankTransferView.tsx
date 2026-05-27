@@ -27,7 +27,6 @@ import { formatVND, exportToCSV, buildFilename } from '../utils';
 
 interface BankTransferViewProps {
   transfers: BankTransfer[];
-  students: Student[];
   userRole: UserRole;
   currentUserName: string;
   onAddTransfer: (transfer: Omit<BankTransfer, 'transferId' | 'createdAt'>) => void;
@@ -37,7 +36,6 @@ interface BankTransferViewProps {
 
 export default function BankTransferView({
   transfers,
-  students,
   userRole,
   currentUserName,
   onAddTransfer,
@@ -52,7 +50,6 @@ export default function BankTransferView({
   const [editingTransfer, setEditingTransfer] = useState<BankTransfer | null>(null);
 
   // Form Fields State
-  const [studentId, setStudentId] = useState('');
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [transferDate, setTransferDate] = useState(new Date().toISOString().substring(0, 10));
@@ -86,7 +83,6 @@ export default function BankTransferView({
   // Handle start editing
   const startEdit = (trf: BankTransfer) => {
     setEditingTransfer(trf);
-    setStudentId(trf.studentId || '');
     setMonth(trf.month);
     setYear(trf.year);
     setTransferDate(trf.transferDate);
@@ -99,7 +95,6 @@ export default function BankTransferView({
 
   // Reset form status
   const resetForm = () => {
-    setStudentId('');
     setMonth(new Date().getMonth() + 1);
     setYear(new Date().getFullYear());
     setTransferDate(new Date().toISOString().substring(0, 10));
@@ -135,7 +130,6 @@ export default function BankTransferView({
       // Edit mode
       const updated: BankTransfer = {
         ...editingTransfer,
-        studentId: studentId || undefined,
         month,
         year,
         transferDate,
@@ -148,7 +142,6 @@ export default function BankTransferView({
     } else {
       // Add mode
       const payload = {
-        studentId: studentId || undefined,
         month,
         year,
         transferDate,
@@ -172,22 +165,14 @@ export default function BankTransferView({
     }
   };
 
-  // Helper utility to get student full name for presentation
-  const getStudentName = (sid?: string) => {
-    if (!sid) return 'Khách vãng lai / Không liên kết';
-    const st = students.find(s => s.studentId === sid);
-    return st ? `${st.fullName} (${st.nickname || 'Không có biệt danh'})` : `Võ sinh cũ (#${sid})`;
-  };
-
   // Helper to filter and map data
   const filteredTransfers = transfers.filter(t => {
     // 1. Search Query
     let matchesSearch = true;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const sName = getStudentName(t.studentId).toLowerCase();
       const trfNote = t.note.toLowerCase();
-      matchesSearch = sName.includes(q) || trfNote.includes(q) || t.transferId.toLowerCase().includes(q);
+      matchesSearch = trfNote.includes(q) || t.transferId.toLowerCase().includes(q);
     }
 
     // 2. Filter Month
@@ -208,7 +193,6 @@ export default function BankTransferView({
   const handleExportCSV = () => {
     const csvData = filteredTransfers.map(t => ({
       'Mã GD': t.transferId,
-      'Học viên': getStudentName(t.studentId),
       'Kỳ Học Phí': `T.${t.month}/${t.year}`,
       'Ngày CK': t.transferDate,
       'Số tiền (VND)': t.amount,
@@ -219,7 +203,7 @@ export default function BankTransferView({
 
     exportToCSV(
       csvData,
-      ['Mã GD', 'Học viên', 'Kỳ Học Phí', 'Ngày CK', 'Số tiền (VND)', 'Ghi chú', 'Người ghi', 'Ngày ghi sổ'],
+      ['Mã GD', 'Kỳ Học Phí', 'Ngày CK', 'Số tiền (VND)', 'Ghi chú', 'Người ghi', 'Ngày ghi sổ'],
       buildFilename('so_chuyen_khoan_ngan_hang', 'csv')
     );
   };
@@ -296,27 +280,7 @@ export default function BankTransferView({
             </span>
           </div>
 
-          <form onSubmit={validateAndSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {/* Associated Student selection */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
-                <span>Võ học viên đóng học phí</span>
-                <HelpCircle className="h-3 w-3 text-gray-400" title="Tên học viên thừa hưởng giao dịch này" />
-              </label>
-              <select
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                className="w-full rounded-lg border border-gray-250 bg-white py-2 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer"
-              >
-                <option value="">-- Chọn Võ Sinh Liên Kết (Nếu có) --</option>
-                {students.map(s => (
-                  <option key={s.studentId} value={s.studentId}>
-                    {s.fullName} {s.nickname ? `(${s.nickname})` : ''} - Lớp {s.classId}
-                  </option>
-                ))}
-              </select>
-            </div>
-
+          <form onSubmit={validateAndSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-3 font-semibold">
             {/* Tuition month/year */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-gray-500 uppercase">Học phí cho Tháng mấy (Kỳ thu)</label>
@@ -375,12 +339,12 @@ export default function BankTransferView({
             </div>
 
             {/* Note text field */}
-            <div className="sm:col-span-2 space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase">Ghi chú biên nhận (Nội dung CK hoặc số tham chiếu)</label>
+            <div className="sm:col-span-3 space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase">Ghi chú biên nhận (Nội dung CK, Tên võ sinh, chi tiết giao dịch)</label>
               <input
                 type="text"
                 required
-                placeholder="ví dụ: Nguyen Van A chuyen khoan hoc phi thang 2 lop b1"
+                placeholder="ví dụ: Nguyen Van A chuyen khoa hoc phi vao tai khoan Vietcombank hoac Techcombank"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 className="w-full rounded-lg border border-gray-250 bg-white py-2 px-3 focus:border-emerald-500 focus:outline-none text-xs font-medium"
@@ -488,7 +452,6 @@ export default function BankTransferView({
               <thead className="bg-[#fafbfb] border-b border-gray-100 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-2.5">Mã GD</th>
-                  <th className="px-4 py-2.5">Học Viên Nhận Học Phí</th>
                   <th className="px-4 py-2.5 text-center">Kỳ Học Phí</th>
                   <th className="px-4 py-2.5 text-center">Ngày CK</th>
                   <th className="px-4 py-2.5 text-right">Số Tiền</th>
@@ -500,7 +463,7 @@ export default function BankTransferView({
               <tbody className="divide-y divide-gray-150/60 font-medium">
                 {filteredTransfers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-xs">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-xs">
                       Không tìm thấy bản ghi chuyển khoản nào khớp trong sổ sách.
                     </td>
                   </tr>
@@ -512,21 +475,6 @@ export default function BankTransferView({
                         <span className="bg-emerald-50 font-black text-emerald-800 px-1.5 py-0.5 rounded text-[9.5px]">
                           {t.transferId}
                         </span>
-                      </td>
-
-                      {/* Linked student */}
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                          <div>
-                            <p className="text-xs font-semibold text-gray-850">
-                              {getStudentName(t.studentId)}
-                            </p>
-                            {t.studentId && (
-                              <p className="text-[9px] text-gray-400 font-mono">MSP: {t.studentId}</p>
-                            )}
-                          </div>
-                        </div>
                       </td>
 
                       {/* Tuition period */}
@@ -547,7 +495,7 @@ export default function BankTransferView({
                       </td>
 
                       {/* Description Notes */}
-                      <td className="px-4 py-2.5 text-gray-600 max-w-[150px] truncate text-[11px]" title={t.note}>
+                      <td className="px-4 py-2.5 text-gray-600 max-w-[200px] truncate text-[11px]" title={t.note}>
                         {t.note}
                       </td>
 
@@ -585,7 +533,7 @@ export default function BankTransferView({
               </tbody>
               <tfoot className="bg-[#fafbfb] border-t border-gray-200 font-bold text-gray-800 select-none">
                 <tr className="bg-emerald-50/15">
-                  <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
+                  <td colSpan={3} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
                     Tổng cộng hạch toán chuyển khoản:
                   </td>
                   <td className="px-4 py-3 font-mono font-black text-[12px] text-emerald-800 text-right">

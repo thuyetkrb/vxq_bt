@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Settings, Info, Users, Shield, CheckCircle, Trash2, Edit3, UserPlus, XCircle, LogIn } from 'lucide-react';
-import { AppConfig, User, UserRole } from '../types';
+import { Settings, Info, Users, Shield, CheckCircle, Trash2, Edit3, UserPlus, XCircle, LogIn, Database, CloudLightning, Copy, Check, Download, Upload, HelpCircle, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { AppConfig, User, UserRole, Student, TuitionPayment, BankTransfer, Announcement } from '../types';
 
 interface ConfigSettingsProps {
   config: AppConfig;
@@ -15,6 +15,17 @@ interface ConfigSettingsProps {
   onSwitchUser: (username: string) => void;
   currentUser: string;
   onUpdateUsers: (updatedUsers: User[]) => void;
+  students: Student[];
+  payments: TuitionPayment[];
+  bankTransfers: BankTransfer[];
+  announcements: Announcement[];
+  onSyncImport: (data: {
+    students?: Student[];
+    payments?: TuitionPayment[];
+    bankTransfers?: BankTransfer[];
+    users?: User[];
+    announcements?: Announcement[];
+  }) => void;
 }
 
 export default function ConfigSettings({
@@ -24,7 +35,12 @@ export default function ConfigSettings({
   onUpdateConfig,
   onSwitchUser,
   currentUser,
-  onUpdateUsers
+  onUpdateUsers,
+  students,
+  payments,
+  bankTransfers,
+  announcements,
+  onSyncImport
 }: ConfigSettingsProps) {
   const [centerName, setCenterName] = useState(config.centerName);
   const [address, setAddress] = useState(config.address);
@@ -33,6 +49,14 @@ export default function ConfigSettings({
   const [defaultTuitionFee, setDefaultTuitionFee] = useState(String(config.defaultTuitionFee));
   const [academicYear, setAcademicYear] = useState(String(config.academicYear));
   
+  const [googleScriptsUrl, setGoogleScriptsUrl] = useState(config.googleScriptsUrl || '');
+  const [googleScriptsId, setGoogleScriptsId] = useState(config.googleScriptsId || '');
+
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
@@ -79,11 +103,309 @@ export default function ConfigSettings({
       phone,
       receiptPrefix,
       defaultTuitionFee: fee,
-      academicYear: year
+      academicYear: year,
+      googleScriptsUrl,
+      googleScriptsId
     });
 
     setSuccess('Đã cập nhật cấu hình võ quán thành công trên toàn hệ thống!');
     setTimeout(() => setSuccess(''), 4000);
+  };
+
+  const API_CODE = `// GOOGLE APPS SCRIPT DATABASE ENDPOINT
+// Copy toàn bộ mã này dán vào và triển khai dạng Web App trên Google Sheets của bạn.
+
+function doGet(e) {
+  var action = e.parameter.action;
+  if (action === "fetch") {
+    try {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        data: {
+          users: readSheetData("Users"),
+          students: readSheetData("Students"),
+          tuitionPayments: readSheetData("TuitionPayments"),
+          bankTransfers: readSheetData("BankTransfers"),
+          announcements: readSheetData("Announcements")
+        }
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Yêu cầu không hợp lệ" })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var rawData = e.postData.contents;
+    var payload = JSON.parse(rawData);
+    var action = payload.action;
+    
+    if (action === "push") {
+      var data = payload.data;
+      if (data.users) writeSheetData("Users", data.users);
+      if (data.students) writeSheetData("Students", data.students);
+      if (data.tuitionPayments) writeSheetData("TuitionPayments", data.tuitionPayments);
+      if (data.bankTransfers) writeSheetData("BankTransfers", data.bankTransfers);
+      if (data.announcements) writeSheetData("Announcements", data.announcements);
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Đã đồng bộ dữ liệu thành công lên Google Sheets!"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Hành động không xác định" })).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function readSheetData(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  var rows = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return [];
+  var headers = rows[0];
+  var data = [];
+  for (var i = 1; i < rows.length; i++) {
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      var cellVal = rows[i][j];
+      if (cellVal instanceof Date) {
+        cellVal = cellVal.toISOString().substring(0, 10);
+      }
+      obj[headers[j]] = cellVal;
+    }
+    data.push(obj);
+  }
+  return data;
+}
+
+function writeSheetData(sheetName, list) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  } else {
+    sheet.clear();
+  }
+  if (!list || list.length === 0) return;
+  var headers = Object.keys(list[0]);
+  sheet.appendRow(headers);
+  var values = [];
+  for (var i = 0; i < list.length; i++) {
+    var row = [];
+    for (var j = 0; j < headers.length; j++) {
+      var val = list[i][headers[j]];
+      if (val === undefined || val === null) {
+        row.push("");
+      } else {
+        row.push(val);
+      }
+    }
+    values.push(row);
+  }
+  sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+}`;
+
+  const handleUpdateScriptsUrlAndId = (input: string) => {
+    const value = input.trim();
+    if (!value) {
+      setGoogleScriptsUrl('');
+      setGoogleScriptsId('');
+      return;
+    }
+    if (value.startsWith('https://')) {
+      setGoogleScriptsUrl(value);
+      const match = value.match(/\/macros\/s\/([^\/]+)/);
+      if (match && match[1]) {
+        setGoogleScriptsId(match[1]);
+      }
+    } else {
+      setGoogleScriptsId(value);
+      setGoogleScriptsUrl(`https://script.google.com/macros/s/${value}/exec`);
+    }
+  };
+
+  const handleSyncTest = async () => {
+    if (!googleScriptsUrl) {
+      setSyncStatus('error');
+      setSyncMessage('Vui lòng cấu hình URL hoặc ID ứng dụng Web Google Apps Script trước!');
+      return;
+    }
+    setSyncStatus('loading');
+    setSyncMessage('Đang kết nối thử nghiệm đến Google Apps Script...');
+    try {
+      const resp = await fetch(`${googleScriptsUrl}?action=fetch`, { method: 'GET', redirect: 'follow' });
+      const result = await resp.json();
+      if (result.status === 'success') {
+        setSyncStatus('success');
+        setSyncMessage('Kết nối thành công! Đã kết nối thông suốt với Google Sheets.');
+      } else {
+        setSyncStatus('error');
+        setSyncMessage(`Nhận kết quả lỗi từ Script: ${result.message || 'Hành động thất bại'}`);
+      }
+    } catch (e: any) {
+      setSyncStatus('error');
+      setSyncMessage(`Không thể kết nối. Hãy đảm bảo bạn đã triển khai Web App với quyền truy cập "Anyone" (Bất kỳ ai). Chi tiết: ${e.message}`);
+    }
+  };
+
+  const handleSyncPull = async () => {
+    if (!googleScriptsUrl) {
+      setSyncStatus('error');
+      setSyncMessage('Vui lòng cấu hình URL hoặc ID ứng dụng Web Google Apps Script!');
+      return;
+    }
+    if (!window.confirm('Cảnh báo! Nhập dữ liệu từ Google Sheets sẽ thay thế danh sách Võ Sinh, Hóa Đơn, Chuyển Khoản hiện có trên trình duyệt của bạn. Bạn có muốn tiếp tục?')) {
+      return;
+    }
+    setSyncStatus('loading');
+    setSyncMessage('Đang tải dữ liệu từ Google Sheets về máy...');
+    try {
+      const resp = await fetch(`${googleScriptsUrl}?action=fetch`, { method: 'GET', redirect: 'follow' });
+      const result = await resp.json();
+      if (result.status === 'success' && result.data) {
+        const d = result.data;
+        
+        const parsedStudents: Student[] = (d.students || []).map((s: any) => ({
+          studentId: String(s.studentId || ''),
+          fullName: String(s.fullName || ''),
+          nickname: s.nickname ? String(s.nickname) : undefined,
+          dateOfBirth: String(s.dateOfBirth || ''),
+          gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
+          parentName: String(s.parentName || ''),
+          parentPhone: String(s.parentPhone || ''),
+          phone: s.phone ? String(s.phone) : undefined,
+          address: String(s.address || ''),
+          email: String(s.email || ''),
+          classId: s.classId ? String(s.classId) : undefined,
+          tuitionFee: parseFloat(s.tuitionFee) || 0,
+          discount: parseFloat(s.discount) || 0,
+          note: String(s.note || ''),
+          activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
+          enrollmentDate: String(s.enrollmentDate || ''),
+          createdAt: String(s.createdAt || new Date().toISOString()),
+          updatedAt: String(s.updatedAt || new Date().toISOString())
+        }));
+
+        const parsedPayments: TuitionPayment[] = (d.tuitionPayments || d.payments || []).map((p: any) => ({
+          paymentId: String(p.paymentId || ''),
+          studentId: String(p.studentId || ''),
+          classId: p.classId ? String(p.classId) : undefined,
+          month: parseInt(p.month) || new Date().getMonth() + 1,
+          year: parseInt(p.year) || new Date().getFullYear(),
+          amount: parseFloat(p.amount) || 0,
+          paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
+          paidDate: p.paidDate ? String(p.paidDate) : undefined,
+          collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
+          receiptNo: String(p.receiptNo || ''),
+          note: String(p.note || ''),
+          createdAt: String(p.createdAt || new Date().toISOString()),
+          updatedAt: String(p.updatedAt || new Date().toISOString())
+        }));
+
+        const parsedTransfers: BankTransfer[] = (d.bankTransfers || []).map((b: any) => ({
+          transferId: String(b.transferId || ''),
+          studentId: b.studentId ? String(b.studentId) : undefined,
+          month: parseInt(b.month) || new Date().getMonth() + 1,
+          year: parseInt(b.year) || new Date().getFullYear(),
+          transferDate: String(b.transferDate || ''),
+          amount: parseFloat(b.amount) || 0,
+          note: String(b.note || ''),
+          createdBy: String(b.createdBy || ''),
+          createdAt: String(b.createdAt || new Date().toISOString())
+        }));
+
+        const parsedUsers: User[] = (d.users || []).map((u: any) => ({
+          username: String(u.username || ''),
+          fullName: String(u.fullName || ''),
+          role: u.role as UserRole,
+          isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
+          password: u.password ? String(u.password) : undefined
+        }));
+
+        const parsedAnnouncements: Announcement[] = (d.announcements || []).map((a: any) => ({
+          announcementId: String(a.announcementId || ''),
+          title: String(a.title || ''),
+          content: String(a.content || ''),
+          createdBy: String(a.createdBy || ''),
+          createdAt: String(a.createdAt || new Date().toISOString()),
+          updatedAt: String(a.updatedAt || new Date().toISOString()),
+          pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
+        }));
+
+        onSyncImport({
+          students: parsedStudents,
+          payments: parsedPayments,
+          bankTransfers: parsedTransfers,
+          users: parsedUsers.length > 0 ? parsedUsers : undefined,
+          announcements: parsedAnnouncements.length > 0 ? parsedAnnouncements : undefined
+        });
+
+        setSyncStatus('success');
+        setSyncMessage(`Đồng bộ TẢI VỀ hoàn tất! Đã cập nhật thành công ${parsedStudents.length} Võ sinh, ${parsedPayments.length} Hóa đơn, ${parsedTransfers.length} Giao dịch chuyển khoản thương ngân về máy.`);
+      } else {
+        setSyncStatus('error');
+        setSyncMessage(`Lỗi tải dữ liệu: ${result.message || 'Cấu trúc phản hồi không hợp lệ'}`);
+      }
+    } catch (e: any) {
+      setSyncStatus('error');
+      setSyncMessage(`Lỗi trong lúc kết nối lấy dữ liệu: ${e.message}`);
+    }
+  };
+
+  const handleSyncPush = async () => {
+    if (!googleScriptsUrl) {
+      setSyncStatus('error');
+      setSyncMessage('Vui lòng cấu hình URL hoặc ID ứng dụng Web Google Apps Script!');
+      return;
+    }
+    if (!window.confirm('Bạn có chắc chắn muốn xuất đẩy toàn bộ dữ liệu thiết bị hiện tại đè lên bảng dữ liệu Google Sheets của bạn không?')) {
+      return;
+    }
+    setSyncStatus('loading');
+    setSyncMessage('Đang truyền đẩy và ghi đè dữ liệu lên Google Sheets...');
+    try {
+      const payload = {
+        action: 'push',
+        data: {
+          users,
+          students,
+          tuitionPayments: payments,
+          bankTransfers,
+          announcements
+        }
+      };
+
+      const resp = await fetch(googleScriptsUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        redirect: 'follow'
+      });
+      const result = await resp.json();
+      if (result.status === 'success') {
+        setSyncStatus('success');
+        setSyncMessage('Đồng bộ tải lên (PUSH) thành công rực rỡ! Bảng dữ liệu của bạn trên Google Sheets đã được cập nhật đồng bộ hoàn toàn.');
+      } else {
+        setSyncStatus('error');
+        setSyncMessage(`Lỗi phản hồi từ máy chủ: ${result.message || 'Thất bại'}`);
+      }
+    } catch (e: any) {
+      setSyncStatus('error');
+      setSyncMessage(`Lỗi đồng bộ đẩy dữ liệu: ${e.message}`);
+    }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(API_CODE);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const handleStartAdd = () => {
@@ -328,6 +650,24 @@ export default function ConfigSettings({
                     className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none disabled:opacity-60"
                   />
                 </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                    <CloudLightning className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Ứng dụng Web Google Apps Script (URL hoặc ID)</span>
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!canEditConfig}
+                    value={googleScriptsUrl || googleScriptsId}
+                    onChange={(e) => handleUpdateScriptsUrlAndId(e.target.value)}
+                    placeholder="Dán ID Web App (vd: AKfycb...) hoặc URL hoàn chỉnh (macros/s/.../exec)"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 px-3 text-xs font-mono font-bold focus:border-emerald-500 focus:outline-none disabled:opacity-60"
+                  />
+                  <p className="text-[9.5px] text-gray-400 mt-1 leading-snug">
+                    Liên kết hạch toán cơ sở dữ liệu Google Sheets của bạn. Hệ thống sẽ tự động ghép ID vào URL gọi API chuẩn.
+                  </p>
+                </div>
               </div>
 
               {canEditConfig ? (
@@ -345,6 +685,166 @@ export default function ConfigSettings({
                 </p>
               )}
             </form>
+          </div>
+
+          {/* =============================================================
+              MODULE: GOOGLE SHEETS CLOUD SYNCHRONIZATION PANEL
+              ============================================================= */}
+          <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-xs font-sans">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+              <div className="flex items-center gap-1.5 text-gray-800 font-bold text-xs uppercase">
+                <Database className="h-4 w-4 text-emerald-600" />
+                <span>🔌 Đồng Bộ Cơ sở dữ liệu Google Sheets Cloud</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstructions(!showInstructions)}
+                className="flex items-center gap-1 text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-3 py-1 rounded-lg transition"
+              >
+                <HelpCircle className="h-3.5 w-3.5" /> 
+                {showInstructions ? 'Ẩn hướng dẫn cài đặt' : 'Mở hướng dẫn cấu hình'}
+              </button>
+            </div>
+
+            {/* Config warning if no url */}
+            {!config.googleScriptsUrl && (
+              <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-xs text-amber-800 flex items-start gap-2 mb-4">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Chưa cấu hình Google Apps Script!</p>
+                  <p className="mt-0.5">Vui lòng điền mã ID hoặc URL ứng dụng Web Apps Script vào biểu mẫu "Thông tin chi nhánh" phía trên và nhấn lưu cấu hình trước khi thực hiện đồng bộ.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Status Banner */}
+            {syncStatus !== 'idle' && (
+              <div className={`rounded-lg border p-3.5 text-xs font-semibold flex items-start gap-2 mb-4 ${
+                syncStatus === 'loading' ? 'bg-indigo-50 border-indigo-100 text-indigo-950' :
+                syncStatus === 'success' ? 'bg-emerald-50 border-emerald-150 text-emerald-900' :
+                'bg-rose-50 border-rose-150 text-rose-900'
+              }`}>
+                {syncStatus === 'loading' ? (
+                  <RefreshCw className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5 animate-spin" />
+                ) : syncStatus === 'success' ? (
+                  <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <p className="font-bold uppercase tracking-wider text-[10px]">
+                    {syncStatus === 'loading' ? '⏳ Hệ thống đang xử lý...' :
+                     syncStatus === 'success' ? '✨ Thành công!' : '❌ Lỗi kết nối'}
+                  </p>
+                  <p className="mt-1 leading-relaxed font-medium">{syncMessage}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Collapsible Apps Script Instructions */}
+            {showInstructions && (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-150 mb-5 space-y-4 text-xs text-gray-700">
+                <h3 className="font-bold text-gray-950 text-sm border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
+                  Hướng dẫn cấu hình kết nối Google Sheets làm Data Center:
+                </h3>
+                <ol className="list-decimal pl-4 space-y-2 leading-relaxed font-medium">
+                  <li>Mở bảng tính Google Sheets của bạn. Đảm bảo bạn có các sheet theo hướng dẫn của hệ thống (<b>Users</b>, <b>Students</b>, <b>TuitionPayments</b>, <b>BankTransfers</b>, <b>Announcements</b>).</li>
+                  <li>Nhấp vào <b>Tiện ích mở rộng (Extensions)</b> ở menu trên cùng &gt; chọn <b>Apps Script</b>.</li>
+                  <li>Xóa tất cả mã hiện tại trong trình biên tập Apps Script, sau đó <b>dán mã Javascript ở ô dưới đây</b> vào.</li>
+                  <li>Click nút <b>Lưu (Save icon / Cmd+S)</b>.</li>
+                  <li>Nhấn nút <b>Triển khai (Deploy)</b> ở góc trên bên phải &gt; Chọn <b>Triển khai mới (New deployment)</b>.</li>
+                  <li>Nhấn vào bánh răng cấu hình cạnh chữ Select type &gt; Chọn <b>Ứng dụng web (Web app)</b>.</li>
+                  <li>Điền Mô tả bất kỳ, ở ô <b>Quyền truy cập (Who has access)</b>, chọn bắt buộc là: <b>Bất kỳ ai (Anyone)</b>. Nhấn <b>Triển khai (Deploy)</b>.</li>
+                  <li>Bấm nút <b>Cấp quyền truy cập (Authorize access)</b>, chọn tài khoản Gmail của bạn, click <b>Advanced</b> &gt; chọn <b>Go to Untitled project (unsafe)</b> và bấm <b>Allow</b> để đồng ý cấp quyền.</li>
+                  <li>Sao chép <b>URL Ứng dụng web</b> hoặc <b>ID triển khai</b> (đoạn mã AKfycb... dài dặc) và dán nó vào biểu mẫu "Thông tin chi nhánh" phía trên rồi nhấn <b>Lưu</b>.</li>
+                </ol>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-slate-800">
+                    <span className="font-bold text-[10.5px] uppercase tracking-wider">Mã nguồn Google Apps Script:</span>
+                    <button
+                      type="button"
+                      onClick={copyToClipboard}
+                      className="flex items-center gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded transition"
+                    >
+                      {copiedCode ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copiedCode ? 'Đã sao chép!' : 'Sao chếpmã'}
+                    </button>
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-[#10b981] font-mono text-[10.5px] rounded-lg max-h-60 overflow-y-auto overflow-x-auto select-all leading-relaxed whitespace-pre font-medium border border-slate-800 shadow-inner">
+                    {API_CODE}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* Database Metrics Dashboard */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+              <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
+                <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Võ sinh</span>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{students.length}</p>
+                <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Hồ sơ tập luyện</p>
+              </div>
+              <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
+                <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Hóa đơn thu</span>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{payments.length}</p>
+                <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Biên lai ghi nhận</p>
+              </div>
+              <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
+                <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Giao dịch bank</span>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{bankTransfers.length}</p>
+                <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Chuyển khoản quỹ</p>
+              </div>
+              <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
+                <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Tài khoản</span>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{users.length}</p>
+                <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Người hạch toán</p>
+              </div>
+              <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
+                <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Thông báo</span>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{announcements.length}</p>
+                <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Bản tin thông đạt</p>
+              </div>
+            </div>
+
+            {/* Sync trigger actions */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handleSyncTest}
+                className="flex items-center justify-center gap-1.5 font-bold text-gray-650 hover:text-gray-900 border border-gray-250 bg-white hover:bg-gray-50 px-4 py-2 rounded-lg transition cursor-pointer"
+              >
+                <CloudLightning className="h-4 w-4 text-amber-500" />
+                Kiểm tra kết nối
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncPull}
+                disabled={!config.googleScriptsUrl || syncStatus === 'loading'}
+                className="flex items-center justify-center gap-1.5 font-bold text-teal-800 bg-[#ccfbf1] hover:bg-[#99f6e4] disabled:opacity-50 border border-[#99f6e4] px-4 py-2 rounded-lg transition cursor-pointer"
+              >
+                <Download className="h-4 w-4 text-teal-700" />
+                📥 Tải dữ liệu về máy (PULL)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncPush}
+                disabled={!config.googleScriptsUrl || syncStatus === 'loading' || userRole !== 'SUPER_ADMIN'}
+                className="flex items-center justify-center gap-1.5 font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-4 py-2 rounded-lg transition cursor-pointer shadow-sm shadow-emerald-250"
+              >
+                <Upload className="h-4 w-4 text-white" />
+                📤 Đẩy dữ liệu lên Cloud (PUSH)
+              </button>
+            </div>
+
+            {userRole !== 'SUPER_ADMIN' && (
+              <p className="text-[10.5px] text-gray-400 text-right mt-2 italic">
+                * Chỉ có vai trò <b>SUPER_ADMIN</b> mới được quyền Đẩy dữ liệu ghi đè lên Google Sheets (PUSH). Các vai trò khác vẫn được phép Tải dữ liệu về máy (PULL) để tra cứu.
+              </p>
+            )}
           </div>
 
           {/* Accounts list Management Panel */}

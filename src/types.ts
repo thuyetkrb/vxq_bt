@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF' | 'VIEWER';
+export type UserRole = 'SUPER_ADMIN' | 'SUPPER_ADMIN' | 'ADMIN' | 'STAFF' | 'VIEWER';
 
 export interface User {
   username: string;
@@ -37,7 +37,7 @@ export interface Student {
   phone?: string;
   address: string;
   email: string;
-  classId: string; // references Class.classId
+  classId?: string; // references Class.classId (optional)
   tuitionFee: number; // actual fee (maybe discounted)
   discount: number; // in percentage or VND
   note: string;
@@ -50,7 +50,7 @@ export interface Student {
 export interface TuitionPayment {
   paymentId: string;
   studentId: string;
-  classId: string;
+  classId?: string;
   month: number; // 1-12
   year: number;
   amount: number; // paid amount in VND
@@ -131,4 +131,6 @@ export interface AppConfig {
   logoUrl?: string;
   defaultTuitionFee: number;
   academicYear: number;
+  googleScriptsUrl?: string;
+  googleScriptsId?: string;
 }
