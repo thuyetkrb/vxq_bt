@@ -1,5 +1,5 @@
 {
-  "name": "Hệ thống Quản lý Lớp học và Học phí",
+  "name": "Lớp VXQ Bình Tân",
   "description": "Hệ thống quản lý lớp học, thông tin học sinh, theo dõi học phí, thu chi và báo cáo lịch sử tối ưu cho trung tâm giáo dục, giao diện xanh lá tinh tế, tương thích di động.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
