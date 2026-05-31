@@ -1,7 +1,7 @@
 # 🥋 VXQ BÌNH TÂN
 
 > **Đường link chạy ứng dụng trực tiếp:**  
-> 👉 [**https://thuyetkrb.github.io/vxq_bt/**](https://thuyetkrb.github.io/vxq_bt/)
+> 👉 [**https://www.vxqbinhtan.io.vn**](https://www.vxqbinhtan.io.vn)
 
 ---
 
