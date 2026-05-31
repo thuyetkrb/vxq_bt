@@ -1400,7 +1400,6 @@ export default function App() {
                                       <td className="px-3 py-3.5 font-mono text-[9.5px] text-gray-400 text-center border-r border-gray-100 font-bold">{st.studentId}</td>
                                       <td className="px-4 py-3.5 font-bold text-gray-900 border-r border-gray-100">
                                         <p>{st.fullName}</p>
-                                        {st.nickname && <span className="text-[10px] text-emerald-700 italic font-medium">Gọi: {st.nickname}</span>}
                                       </td>
                                       <td className="px-3 py-3.5 font-mono text-[11px] text-gray-700 border-r border-gray-100">
                                         {st.phone || <span className="text-gray-300 italic font-normal text-[10px]">Trống</span>}
