@@ -24,6 +24,7 @@ import {
   LogOut,
   UserCheck,
   Download,
+  Key,
   Lock,
   CalendarDays,
   CheckCircle,
@@ -58,7 +59,7 @@ import {
 } from './types';
 
 import {
-  MOCK_USERS,
+  INITIAL_USERS,
   INITIAL_CONFIG,
   INITIAL_CLASSES,
   INITIAL_STUDENTS,
@@ -124,13 +125,6 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (!parsed.some((u: any) => u.fullName === 'thuyethn' || u.username === 'thuyethn' || u.username === 'superadmin')) {
-          localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
-          return MOCK_USERS.map((u: any) => ({
-            ...u,
-            role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
-          }));
-        }
         return parsed.map((u: any) => ({
           ...u,
           role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
@@ -139,8 +133,8 @@ export default function App() {
         console.error('Error hydrating vxq_users', e);
       }
     }
-    localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
-    return MOCK_USERS.map((u: any) => ({
+    localStorage.setItem('vxq_users', JSON.stringify(INITIAL_USERS));
+    return INITIAL_USERS.map((u: any) => ({
       ...u,
       role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
     }));
@@ -154,7 +148,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const saved = localStorage.getItem('vxq_remembered_auth');
     const savedUsersStr = localStorage.getItem('vxq_users');
-    let list: User[] = MOCK_USERS;
+    let list: User[] = INITIAL_USERS;
     if (savedUsersStr) {
       try {
         list = JSON.parse(savedUsersStr);
@@ -178,13 +172,21 @@ export default function App() {
         console.error('Error parsing stored login credentials', e);
       }
     }
-    return list.find(u => u.username === 'viewer') || list[3] || MOCK_USERS[3]; // Fallback to 'viewer' by default if not logged in
+    return list.find(u => u.username === 'viewer') || list[3] || INITIAL_USERS[2]; // Fallback to 'viewer' by default if not logged in
   });
 
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [loginError, setLoginError] = useState('');
+
+  // Change password modal states
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
   // Calendar Period (Accounting month and year)
   const [currentMonth, setCurrentMonth] = useState<number>(5); // May
@@ -390,7 +392,7 @@ export default function App() {
     let isMounted = true;
     setDbHealth('checking');
 
-    const checkGoogleDb = async () => {
+    const checkGoogleDb = async (isInitialLoad: boolean = false) => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout trigger
@@ -417,6 +419,112 @@ export default function App() {
           if (isMounted) {
             setDbHealth('connected');
             setDbErrorMsg('');
+
+            // On initial app load, automatically pull and synchronize all spreadsheet tables
+            if (isInitialLoad && resData.data) {
+              const d = resData.data;
+
+              // 1. Synchronize Students
+              if (d.students && Array.isArray(d.students)) {
+                const parsedStudents = d.students.map((s: any) => ({
+                  studentId: String(s.studentId || ''),
+                  fullName: String(s.fullName || ''),
+                  nickname: s.nickname ? String(s.nickname) : undefined,
+                  dateOfBirth: String(s.dateOfBirth || ''),
+                  gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
+                  parentName: String(s.parentName || ''),
+                  parentPhone: String(s.parentPhone || ''),
+                  phone: s.phone ? String(s.phone) : undefined,
+                  address: String(s.address || ''),
+                  email: String(s.email || ''),
+                  classId: s.classId ? String(s.classId) : undefined,
+                  tuitionFee: parseFloat(s.tuitionFee) || 0,
+                  discount: parseFloat(s.discount) || 0,
+                  note: String(s.note || ''),
+                  activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
+                  enrollmentDate: String(s.enrollmentDate || ''),
+                  createdAt: String(s.createdAt || new Date().toISOString()),
+                  updatedAt: String(s.updatedAt || new Date().toISOString())
+                }));
+                setStudents(parsedStudents);
+                localStorage.setItem('mec_students', JSON.stringify(parsedStudents));
+              }
+
+              // 2. Synchronize Payments
+              const rawPayments = d.tuitionPayments || d.payments;
+              if (rawPayments && Array.isArray(rawPayments)) {
+                const parsedPayments = rawPayments.map((p: any) => ({
+                  paymentId: String(p.paymentId || ''),
+                  studentId: String(p.studentId || ''),
+                  classId: p.classId ? String(p.classId) : undefined,
+                  month: parseInt(p.month) || new Date().getMonth() + 1,
+                  year: parseInt(p.year) || new Date().getFullYear(),
+                  amount: parseFloat(p.amount) || 0,
+                  paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
+                  paidDate: p.paidDate ? String(p.paidDate) : undefined,
+                  collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
+                  receiptNo: String(p.receiptNo || ''),
+                  note: String(p.note || ''),
+                  createdAt: String(p.createdAt || new Date().toISOString()),
+                  updatedAt: String(p.updatedAt || new Date().toISOString())
+                }));
+                setPayments(parsedPayments);
+                localStorage.setItem('mec_payments', JSON.stringify(parsedPayments));
+              }
+
+              // 3. Synchronize Bank Transfers
+              if (d.bankTransfers && Array.isArray(d.bankTransfers)) {
+                const parsedTransfers = d.bankTransfers.map((b: any) => ({
+                  transferId: String(b.transferId || ''),
+                  studentId: b.studentId ? String(b.studentId) : undefined,
+                  month: parseInt(b.month) || new Date().getMonth() + 1,
+                  year: parseInt(b.year) || new Date().getFullYear(),
+                  transferDate: String(b.transferDate || ''),
+                  amount: parseFloat(b.amount) || 0,
+                  note: String(b.note || ''),
+                  createdBy: String(b.createdBy || ''),
+                  createdAt: String(b.createdAt || new Date().toISOString())
+                }));
+                setBankTransfers(parsedTransfers);
+                localStorage.setItem('mec_bank_transfers', JSON.stringify(parsedTransfers));
+              }
+
+              // 4. Synchronize Users
+              if (d.users && Array.isArray(d.users)) {
+                const parsedUsers = d.users.map((u: any) => {
+                  let role = u.role as UserRole;
+                  if (role === 'SUPPER_ADMIN') {
+                    role = 'SUPER_ADMIN';
+                  }
+                  return {
+                    username: String(u.username || '').trim().toLowerCase(),
+                    fullName: String(u.fullName || ''),
+                    role: role,
+                    isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
+                    password: u.password ? String(u.password) : undefined
+                  };
+                });
+                
+                // If currentUser was default viewer, and we find a logged-in cookie or we have users, it helps update
+                setUsers(parsedUsers);
+                localStorage.setItem('vxq_users', JSON.stringify(parsedUsers));
+              }
+
+              // 5. Synchronize Announcements
+              if (d.announcements && Array.isArray(d.announcements)) {
+                const parsedAnnouncements = d.announcements.map((a: any) => ({
+                  announcementId: String(a.announcementId || ''),
+                  title: String(a.title || ''),
+                  content: String(a.content || ''),
+                  createdBy: String(a.createdBy || ''),
+                  createdAt: String(a.createdAt || new Date().toISOString()),
+                  updatedAt: String(a.updatedAt || new Date().toISOString()),
+                  pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
+                }));
+                setAnnouncements(parsedAnnouncements);
+                localStorage.setItem('mec_announcements', JSON.stringify(parsedAnnouncements));
+              }
+            }
           }
         } else {
           throw new Error(resData.message || 'Script báo lỗi phản hồi');
@@ -435,10 +543,10 @@ export default function App() {
       }
     };
 
-    checkGoogleDb();
+    checkGoogleDb(true);
 
-    // Recheck again after 5 minutes to ensure connection is steady
-    const intervalId = setInterval(checkGoogleDb, 300000);
+    // Recheck health only (no state override) after 5 minutes to ensure connection is steady
+    const intervalId = setInterval(() => checkGoogleDb(false), 300000);
 
     return () => {
       isMounted = false;
@@ -454,7 +562,7 @@ export default function App() {
       }
     } else {
       const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-      if (!isAdmin && (activeTab === 'config' || activeTab === 'bank_transfers')) {
+      if (!isAdmin && (activeTab === 'config' || activeTab === 'bank_transfers' || activeTab === 'tuition' || activeTab === 'students')) {
         setActiveTab('dashboard');
       }
     }
@@ -494,7 +602,7 @@ export default function App() {
     const prevFullName = currentUser.fullName;
     
     setIsLoggedIn(false);
-    const viewerFallback = users.find(u => u.username === 'viewer') || MOCK_USERS[3];
+    const viewerFallback = users.find(u => u.username === 'viewer') || INITIAL_USERS[2];
     setCurrentUser(viewerFallback); // reset to viewer fallback
     setLoginUsername('');
     setLoginPassword('');
@@ -502,6 +610,75 @@ export default function App() {
     setActiveTab('dashboard');
     
     appendAuditLog('AUTH', prevUsername, 'LOGOUT', `Cựu: ${prevFullName}`, 'Đăng xuất thành công ra khỏi hệ thống');
+  };
+
+  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePasswordError('');
+    setChangePasswordSuccess('');
+
+    if (!isLoggedIn) {
+      setChangePasswordError('Bạn chưa đăng nhập!');
+      return;
+    }
+
+    const currentPasswordCorrect = currentUser.password || currentUser.username;
+    if (currentPasswordInput !== currentPasswordCorrect) {
+      setChangePasswordError('Mật khẩu hiện tại không chính xác!');
+      return;
+    }
+
+    if (newPasswordInput.length < 4) {
+      setChangePasswordError('Mật khẩu mới phải từ 4 ký tự trở lên!');
+      return;
+    }
+
+    if (newPasswordInput !== confirmPasswordInput) {
+      setChangePasswordError('Mật khẩu mới và xác nhận mật khẩu không khớp!');
+      return;
+    }
+
+    const updatedUsers = users.map(u => {
+      if (u.username === currentUser.username) {
+        return {
+          ...u,
+          password: newPasswordInput
+        };
+      }
+      return u;
+    });
+
+    setUsers(updatedUsers);
+    localStorage.setItem('vxq_users', JSON.stringify(updatedUsers));
+
+    const updatedSelf = updatedUsers.find(u => u.username === currentUser.username);
+    if (updatedSelf) {
+      setCurrentUser(updatedSelf);
+      const remembered = localStorage.getItem('vxq_remembered_auth');
+      if (remembered) {
+        try {
+          const parsed = JSON.parse(remembered);
+          localStorage.setItem('vxq_remembered_auth', JSON.stringify({
+            ...parsed,
+            password: newPasswordInput
+          }));
+        } catch (err) {
+          console.error('Error updating remembered auth password', err);
+        }
+      }
+    }
+
+    appendAuditLog('AUTH', currentUser.username, 'UPDATE', 'Mật khẩu cũ', `Thay đổi mật khẩu thành công`);
+    setChangePasswordSuccess('Thay đổi mật khẩu thành công!');
+    
+    setCurrentPasswordInput('');
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+
+    setTimeout(() => {
+      setIsChangePasswordOpen(false);
+      setChangePasswordSuccess('');
+    }, 1500);
   };
 
   // Helper: Log audit trail to the system
@@ -1150,7 +1327,7 @@ export default function App() {
         <nav className="flex-1 px-4 py-4 space-y-1 block">
           {[
             { id: 'dashboard', label: 'Tổng Quan', icon: LayoutDashboard },
-            ...(isLoggedIn ? [
+            ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
               { id: 'tuition', label: 'Quản Lý Học Phí', icon: CreditCard },
               { id: 'students', label: 'DS Võ Sinh', icon: Users }
             ] : []),
@@ -1295,6 +1472,17 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs shadow-3xs hover:shadow-2xs transition-all cursor-pointer"
+                  title="Thay đổi mật khẩu tài khoản"
+                >
+                  <Key className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Đổi mật khẩu</span>
+                </button>
+
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs shadow-3xs hover:shadow-2xs transition-all cursor-pointer"
@@ -1346,7 +1534,7 @@ export default function App() {
                   <span className="text-[10px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded leading-none">{loginError}</span>
                 ) : (
                   <span className="text-[8.5px] text-emerald-700/80 font-bold leading-none mr-2">
-                    💡 Thử đăng nhập: <strong className="font-extrabold underline text-emerald-900">staff</strong> / <strong className="font-extrabold underline text-emerald-900">admin</strong> / <strong className="font-extrabold underline text-emerald-900">superadmin</strong> (Mật khẩu giống tài khoản)
+                    💡 Đăng nhập tài khoản: <strong className="font-extrabold underline text-emerald-900">thuyethn</strong> (Mật khẩu: 123456) / <strong className="font-extrabold underline text-emerald-900">naquang</strong> (Mật khẩu: 123456) / <strong className="font-extrabold underline text-emerald-950">staff</strong> / <strong className="font-extrabold underline text-emerald-950">viewer</strong> (Mật khẩu giống tài khoản)
                   </span>
                 )}
               </div>
@@ -1415,90 +1603,88 @@ export default function App() {
                     </div>
 
                     {/* Top Simple Counters Grid */}
-                    <div className={`grid grid-cols-2 gap-2.5 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
-                    {/* Stat Active Students */}
-                    <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
-                      <div>
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Sĩ số hoạt động</p>
-                        <h3 className="text-sm font-extrabold text-emerald-950 mt-0.5">{students.filter(s => s.activeStatus === 'Active').length} võ sinh</h3>
-                        <p className="text-[8.5px] text-gray-400 mt-0.5">Sỹ số tích cực</p>
-                      </div>
-                      <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-                        <Users className="h-4 w-4" />
-                      </div>
-                    </div>
-
-                    {isAdminOrSuperAdmin ? (
-                      <>
-                        {/* Stat Total Collected in CURRENT month */}
+                    {isLoggedIn && (
+                      <div className={`grid grid-cols-2 gap-2.5 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
+                        {/* Stat Active Students */}
                         <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                           <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Đã thu tháng {currentMonth}</p>
-                            <h3 className="text-sm font-black text-emerald-950 mt-0.5">{formatVND(currentCollectedAmountSum)}</h3>
-                            <p className="text-[8.5px] text-emerald-600 font-bold mt-0.5 font-sans">Đã đóng: {paidCurrentCount} võ sinh</p>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Sĩ số hoạt động</p>
+                            <h3 className="text-sm font-extrabold text-emerald-950 mt-0.5">{students.filter(s => s.activeStatus === 'Active').length} võ sinh</h3>
+                            <p className="text-[8.5px] text-gray-400 mt-0.5">Sỹ số tích cực</p>
                           </div>
-                          <div className="h-8 w-8 rounded-lg bg-emerald-50/55 text-emerald-750 flex items-center justify-center shrink-0">
-                            <CheckCircle className="h-4 w-4" />
+                          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                            <Users className="h-4 w-4" />
                           </div>
                         </div>
 
-                        {/* Stat Outstanding Unpaid */}
-                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Chờ thu tháng {currentMonth}</p>
-                            <h3 className="text-sm font-black text-rose-700 mt-0.5">{formatVND(currentUnpaidAmountSum)}</h3>
-                            <p className="text-[8.5px] text-rose-600 font-bold mt-0.5 font-sans">Còn lại: {unpaidCurrentCount} võ sinh</p>
-                          </div>
-                          <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
-                            <XCircle className="h-4 w-4" />
-                          </div>
-                        </div>
+                        {isAdminOrSuperAdmin ? (
+                          <>
+                            {/* Stat Total Collected in CURRENT month */}
+                            <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Đã thu tháng {currentMonth}</p>
+                                <h3 className="text-sm font-black text-emerald-950 mt-0.5">{formatVND(currentCollectedAmountSum)}</h3>
+                                <p className="text-[8.5px] text-emerald-600 font-bold mt-0.5 font-sans font-sans">Đã đóng: {paidCurrentCount} võ sinh</p>
+                              </div>
+                              <div className="h-8 w-8 rounded-lg bg-emerald-50/55 text-emerald-750 flex items-center justify-center shrink-0">
+                                <CheckCircle className="h-4 w-4" />
+                              </div>
+                            </div>
 
-                        {/* Stat Bank Transfers in CURRENT month */}
-                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Đã chuyển tháng {currentMonth}</p>
-                            <h3 className="text-sm font-black text-sky-850 mt-0.5">{formatVND(currentBankTransferSum)}</h3>
-                            <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans">Hạch toán chuyển khoản</p>
-                          </div>
-                          <div className="h-8 w-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
-                            <Landmark className="h-4 w-4" />
-                          </div>
-                        </div>
+                            {/* Stat Outstanding Unpaid */}
+                            <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans font-sans">Chờ thu tháng {currentMonth}</p>
+                                <h3 className="text-sm font-black text-rose-700 mt-0.5">{formatVND(currentUnpaidAmountSum)}</h3>
+                                <p className="text-[8.5px] text-rose-600 font-bold mt-0.5 font-sans font-sans font-sans">Còn lại: {unpaidCurrentCount} võ sinh</p>
+                              </div>
+                              <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
+                                <XCircle className="h-4 w-4" />
+                              </div>
+                            </div>
 
-                        {/* Stat Remaining Current month */}
-                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
-                          <div>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans">Còn lại tháng {currentMonth}</p>
-                            <h3 className={`text-sm font-black mt-0.5 ${currentMonthRemaining > 0 ? 'text-rose-650' : 'text-emerald-850'}`}>
-                              {formatVND(currentMonthRemaining)}
-                            </h3>
-                            <p className="text-[8.5px] text-gray-400 mt-0.5 font-sans">Số dư cần thu nợ</p>
+                            {/* Stat Bank Transfers in CURRENT month */}
+                            <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans font-sans font-sans">Đã chuyển tháng {currentMonth}</p>
+                                <h3 className="text-sm font-black text-sky-850 mt-0.5">{formatVND(currentBankTransferSum)}</h3>
+                                <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans font-sans font-sans">Hạch toán chuyển khoản</p>
+                              </div>
+                              <div className="h-8 w-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
+                                <Landmark className="h-4 w-4" />
+                              </div>
+                            </div>
+
+                            {/* Stat Remaining Current month */}
+                            <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                              <div>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans font-sans font-sans font-sans">Còn lại tháng {currentMonth}</p>
+                                <h3 className={`text-sm font-black mt-0.5 ${currentMonthRemaining > 0 ? 'text-rose-650' : 'text-emerald-850'}`}>
+                                  {formatVND(currentMonthRemaining)}
+                                </h3>
+                                <p className="text-[8.5px] text-gray-400 mt-0.5 font-sans">Số dư cần thu nợ</p>
+                              </div>
+                              <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${currentMonthRemaining > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-850'}`}>
+                                <CircleDollarSign className="h-4 w-4" />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="col-span-1 sm:col-span-2 bg-gradient-to-r from-emerald-50 to-emerald-100/30 rounded-xl border border-[#d1fae5] p-5 shadow-2xs flex items-center justify-between">
+                            <div>
+                              <p className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-widest font-sans">🔒 BÁO CÁO TÀI CHÍNH BẢO MẬT</p>
+                              <h3 className="text-sm font-extrabold text-emerald-950 mt-1">Doanh Thu & Công Nợ</h3>
+                              <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
+                                Yêu cầu quyền Quản trị viên (ADMIN) hoặc Ban Giám Sát (SUPER_ADMIN) để mở khóa báo cáo tài chính.
+                              </p>
+                            </div>
+                            <div className="h-10 w-10 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center shrink-0">
+                              <Lock className="h-4.5 w-4.5" />
+                            </div>
                           </div>
-                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${currentMonthRemaining > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-850'}`}>
-                            <CircleDollarSign className="h-4 w-4" />
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-1 sm:col-span-2 bg-gradient-to-r from-emerald-50 to-emerald-100/30 rounded-xl border border-[#d1fae5] p-5 shadow-2xs flex items-center justify-between">
-                        <div>
-                          <p className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-widest font-sans">🔒 BÁO CÁO TÀI CHÍNH BẢO MẬT</p>
-                          <h3 className="text-sm font-extrabold text-emerald-950 mt-1">Doanh Thu & Công Nợ</h3>
-                          <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
-                            {isLoggedIn ? (
-                              "Yêu cầu quyền Quản trị viên (ADMIN) hoặc Ban Giám Sát (SUPER_ADMIN) để mở khóa báo cáo tài chính."
-                            ) : (
-                              "Vui lòng đăng nhập hệ thống ở góc trên bên phải bằng tài khoản Quản trị viên để mở khóa báo cáo."
-                            )}
-                          </p>
-                        </div>
-                        <div className="h-10 w-10 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center shrink-0">
-                          <Lock className="h-4.5 w-4.5" />
-                        </div>
+                        )}
                       </div>
                     )}
-                  </div>
 
                   {/* Multi-month Advanced Tuition Status Matrix Block */}
                   {isAdminOrSuperAdmin ? (
@@ -1822,31 +2008,19 @@ export default function App() {
                       })()}
                     </div>
                   </div>
-                ) : (
+                ) : isLoggedIn ? (
                     <div className="bg-white rounded-xl border border-[#d1fae5]/70 p-8 shadow-3xs text-center space-y-4 max-w-lg mx-auto">
                       <div className="mx-auto w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100">
                         <LockKeyhole className="h-7 w-7 text-emerald-650 animate-pulse" />
                       </div>
                       <h3 className="text-emerald-950 font-extrabold text-sm uppercase tracking-wider">
-                        {isLoggedIn ? "THIẾU QUYỀN TRUY CẬP BÁO CÁO" : "YÊU CẦU ĐĂNG NHẬP HỆ THỐNG"}
+                        THIẾU QUYỀN TRUY CẬP BÁO CÁO
                       </h3>
                       <p className="text-xs text-emerald-800/80 leading-relaxed">
-                        {isLoggedIn ? (
-                          "Tính năng và ma trận phân tích báo cáo học phí chi tiết này chỉ dành riêng cho Ban Giám Sát (SUPER_ADMIN) và Quản Trị Viên (ADMIN). Tài khoản nhân viên của bạn hiện không có đủ thẩm quyền truy cập."
-                        ) : (
-                          "Bạn chưa đăng nhập hoặc phiên đã hết hạn. Vui lòng điền thông tin tài khoản và mật khẩu ở bảng góc trên bên phải để mở khóa ma trận báo cáo học phí và chức năng quản lý."
-                        )}
+                        Tính năng và ma trận phân tích báo cáo học phí chi tiết này chỉ dành riêng cho Ban Giám Sát (SUPER_ADMIN) và Quản Trị Viên (ADMIN). Tài khoản nhân viên của bạn hiện không có đủ thẩm quyền truy cập.
                       </p>
-                      
-                      {!isLoggedIn && (
-                        <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100/50 max-w-sm mx-auto text-left">
-                          <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-emerald-800 block mb-1">💡 Thông tin tài khoản Demo:</span>
-                          <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">staff</span> (Mật khẩu: staff)</code>
-                          <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">admin</span> (Mật khẩu: admin)</code>
-                        </div>
-                      )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
                 );
               })()}
@@ -2648,6 +2822,146 @@ export default function App() {
             klass={classes.find(c => c.classId === activeReceiptPayment.classId)}
             config={config}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ----------------- CHANGE PASSWORD MODAL ----------------- */}
+      <AnimatePresence>
+        {isChangePasswordOpen && (
+          <div className="fixed inset-0 z-50 overflow-y-auto no-print">
+            <div className="flex min-h-screen items-center justify-center p-4 text-center">
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  setIsChangePasswordOpen(false);
+                  setChangePasswordError('');
+                  setChangePasswordSuccess('');
+                }}
+                className="fixed inset-0 bg-black/40 transition-opacity cursor-pointer"
+              />
+
+              {/* Modal Card */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative transform overflow-hidden rounded-xl bg-white p-6 text-left shadow-xl transition-all w-full max-w-sm border border-emerald-100"
+              >
+                <div className="flex items-center justify-between border-b border-gray-150 pb-3 mb-4">
+                  <h3 className="text-sm font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+                    <span className="p-1 rounded-md bg-emerald-50 text-emerald-700">
+                      <Lock className="h-4 w-4" />
+                    </span>
+                    ĐỔI MẬT KHẨU TÀI KHOẢN
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsChangePasswordOpen(false);
+                      setChangePasswordError('');
+                      setChangePasswordSuccess('');
+                    }}
+                    className="rounded-lg p-1 text-gray-400 hover:bg-gray-150 hover:text-gray-500 transition-colors cursor-pointer"
+                  >
+                    <X className="h-4.5 w-4.5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+                  <div className="bg-emerald-50/40 p-2.5 rounded-lg border border-emerald-100/50 mb-2">
+                    <p className="text-[11px] text-emerald-950 leading-normal">
+                      Tài khoản: <strong className="font-extrabold">{currentUser.fullName} ({currentUser.username})</strong>
+                    </p>
+                    <p className="text-[9.5px] text-emerald-700/80 uppercase font-bold tracking-wider mt-0.5">
+                      Vai trò: {currentUser.role === 'SUPER_ADMIN' ? 'Ban Giám Sát' : currentUser.role === 'ADMIN' ? 'Quản Trị Viên' : currentUser.role === 'STAFF' ? 'Nhân Viên' : 'Người Xem'}
+                    </p>
+                  </div>
+
+                  {changePasswordError && (
+                    <div className="bg-rose-50 border border-rose-100 text-rose-700 text-xs px-3 py-2 rounded-lg font-bold flex items-center gap-1.5 animate-pulse">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>{changePasswordError}</span>
+                    </div>
+                  )}
+
+                  {changePasswordSuccess && (
+                     <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs px-3 py-2 rounded-lg font-bold flex items-center gap-1.5">
+                      <CheckCircle className="h-4 w-4 shrink-0" />
+                      <span>{changePasswordSuccess}</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-gray-700 uppercase tracking-wide">Mật khẩu hiện tại <span className="text-rose-500">*</span></label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Nhập mật khẩu hiện tại"
+                      value={currentPasswordInput}
+                      onChange={(e) => {
+                        setCurrentPasswordInput(e.target.value);
+                        setChangePasswordError('');
+                      }}
+                      className="w-full text-xs font-semibold p-2.5 bg-gray-50 border border-gray-200 focus:bg-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-gray-750 uppercase tracking-wide">Mật khẩu mới <span className="text-rose-500">*</span></label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Từ 4 ký tự trở lên"
+                      value={newPasswordInput}
+                      onChange={(e) => {
+                        setNewPasswordInput(e.target.value);
+                        setChangePasswordError('');
+                      }}
+                      className="w-full text-xs font-semibold p-2.5 bg-gray-50 border border-gray-200 focus:bg-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-gray-750 uppercase tracking-wide">Xác nhận mật khẩu mới <span className="text-rose-500">*</span></label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Xác nhận mật khẩu mới"
+                      value={confirmPasswordInput}
+                      onChange={(e) => {
+                        setConfirmPasswordInput(e.target.value);
+                        setChangePasswordError('');
+                      }}
+                      className="w-full text-xs font-semibold p-2.5 bg-gray-50 border border-gray-200 focus:bg-white rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsChangePasswordOpen(false);
+                        setChangePasswordError('');
+                        setChangePasswordSuccess('');
+                      }}
+                      className="px-3 py-2 hover:bg-gray-100 text-gray-650 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-lg border border-emerald-600 shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                    >
+                      Cập nhật mật khẩu
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>

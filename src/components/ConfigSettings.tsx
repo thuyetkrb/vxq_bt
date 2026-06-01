@@ -589,8 +589,8 @@ function writeSheetData(sheetName, list) {
       return;
     }
 
-    if (usernameToDelete === 'superadmin') {
-      setUserActionError('Tài khoản quản quản trị tối cao (superadmin) bắt buộc phải tồn tại!');
+    if (usernameToDelete === 'superadmin' || usernameToDelete === 'thuyethn') {
+      setUserActionError('Tài khoản quản trị tối cao (superadmin/thuyethn) bắt buộc phải tồn tại!');
       return;
     }
 
@@ -1017,7 +1017,7 @@ function writeSheetData(sheetName, list) {
                       type="checkbox"
                       id="userIsActive"
                       checked={newIsActive}
-                      disabled={newUsername === 'superadmin'}
+                      disabled={newUsername === 'superadmin' || newUsername === 'thuyethn'}
                       onChange={(e) => setNewIsActive(e.target.checked)}
                       className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded cursor-pointer"
                     />
@@ -1059,7 +1059,7 @@ function writeSheetData(sheetName, list) {
                   <tbody className="divide-y divide-gray-100">
                     {users.map(u => {
                       const isSelf = u.username === currentUser;
-                      const isSystemPrimary = u.username === 'superadmin';
+                      const isSystemPrimary = u.username === 'superadmin' || u.username === 'thuyethn';
                       return (
                         <tr key={u.username} className={`hover:bg-gray-50/40 transition-colors ${isSelf ? 'bg-emerald-50/10' : ''}`}>
                           <td className="px-4 py-3 font-mono font-bold text-gray-800">

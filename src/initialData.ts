@@ -5,9 +5,9 @@
 
 import { Student, TuitionPayment, TeacherTransfer, Announcement, AuditLog, Baseline, AppConfig, User, BankTransfer } from './types';
 
-export const MOCK_USERS: User[] = [
-  { username: 'superadmin', fullName: 'thuyethn', role: 'SUPPER_ADMIN', isActive: true, password: '123456' },
-  { username: 'admin', fullName: 'naquang', role: 'ADMIN', isActive: true, password: '123456' },
+export const INITIAL_USERS: User[] = [
+  { username: 'thuyethn', fullName: 'thuyethn', role: 'SUPER_ADMIN', isActive: true, password: '123456' },
+  { username: 'naquang', fullName: 'naquang', role: 'ADMIN', isActive: true, password: '123456' },
   { username: 'viewer', fullName: 'khách xem', role: 'VIEWER', isActive: true, password: 'viewer' },
   { username: 'staff', fullName: 'NV', role: 'STAFF', isActive: true, password: 'staff' }
 ];
