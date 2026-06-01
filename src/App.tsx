@@ -336,12 +336,14 @@ export default function App() {
         if (
           !parsed.googleScriptsUrl || 
           parsed.googleScriptsId === 'AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q' ||
-          parsed.googleScriptsUrl.includes('AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q')
+          parsed.googleScriptsUrl.includes('AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q') ||
+          parsed.googleScriptsId === 'AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ' ||
+          parsed.googleScriptsUrl.includes('AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ')
         ) {
           parsed = {
             ...parsed,
-            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ/exec',
-            googleScriptsId: 'AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ'
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A/exec',
+            googleScriptsId: 'AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A'
           };
           needsSave = true;
         }
