@@ -124,17 +124,26 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (!parsed.some((u: any) => u.username === 'superadmin' && u.fullName === 'thuyethn')) {
+        if (!parsed.some((u: any) => u.fullName === 'thuyethn' || u.username === 'thuyethn' || u.username === 'superadmin')) {
           localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
-          return MOCK_USERS;
+          return MOCK_USERS.map((u: any) => ({
+            ...u,
+            role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
+          }));
         }
-        return parsed;
+        return parsed.map((u: any) => ({
+          ...u,
+          role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
+        }));
       } catch (e) {
         console.error('Error hydrating vxq_users', e);
       }
     }
     localStorage.setItem('vxq_users', JSON.stringify(MOCK_USERS));
-    return MOCK_USERS;
+    return MOCK_USERS.map((u: any) => ({
+      ...u,
+      role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
+    }));
   });
 
   // Multi-user & Login state simulator with Credentials Persistence
@@ -153,6 +162,10 @@ export default function App() {
         console.error('Error parsing vxq_users in currentUser initialization', e);
       }
     }
+    list = list.map((u: any) => ({
+      ...u,
+      role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
+    }));
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -983,8 +996,12 @@ export default function App() {
       localStorage.setItem('mec_bank_transfers', JSON.stringify(data.bankTransfers));
     }
     if (data.users) {
-      setUsers(data.users);
-      localStorage.setItem('vxq_users', JSON.stringify(data.users));
+      const normalizedUsers = data.users.map((u: any) => ({
+        ...u,
+        role: u.role === 'SUPPER_ADMIN' ? 'SUPER_ADMIN' : u.role
+      }));
+      setUsers(normalizedUsers);
+      localStorage.setItem('vxq_users', JSON.stringify(normalizedUsers));
     }
     if (data.announcements) {
       setAnnouncements(data.announcements);

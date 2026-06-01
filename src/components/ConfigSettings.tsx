@@ -357,13 +357,19 @@ function writeSheetData(sheetName, list) {
           createdAt: String(b.createdAt || new Date().toISOString())
         }));
 
-        const parsedUsers: User[] = (d.users || []).map((u: any) => ({
-          username: String(u.username || ''),
-          fullName: String(u.fullName || ''),
-          role: u.role as UserRole,
-          isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
-          password: u.password ? String(u.password) : undefined
-        }));
+        const parsedUsers: User[] = (d.users || []).map((u: any) => {
+          let role = u.role as UserRole;
+          if (role === 'SUPPER_ADMIN') {
+            role = 'SUPER_ADMIN';
+          }
+          return {
+            username: String(u.username || ''),
+            fullName: String(u.fullName || ''),
+            role: role,
+            isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
+            password: u.password ? String(u.password) : undefined
+          };
+        });
 
         const parsedAnnouncements: Announcement[] = (d.announcements || []).map((a: any) => ({
           announcementId: String(a.announcementId || ''),
