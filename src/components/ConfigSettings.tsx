@@ -198,7 +198,27 @@ function writeSheetData(sheetName, list) {
     sheet.clear();
   }
   if (!list || list.length === 0) return;
-  var headers = Object.keys(list[0]);
+
+  var headersMap = {
+    "Users": ["username", "fullName", "role", "isActive", "password"],
+    "Students": ["studentId", "fullName", "nickname", "dateOfBirth", "gender", "parentName", "parentPhone", "phone", "address", "email", "classId", "tuitionFee", "discount", "note", "activeStatus", "enrollmentDate", "createdAt", "updatedAt"],
+    "TuitionPayments": ["paymentId", "studentId", "classId", "month", "year", "amount", "paidStatus", "paidDate", "collectedBy", "receiptNo", "note", "createdAt", "updatedAt"],
+    "BankTransfers": ["transferId", "studentId", "month", "year", "transferDate", "amount", "note", "createdBy", "createdAt"],
+    "Announcements": ["announcementId", "type", "title", "content", "createdBy", "createdAt", "updatedAt", "pinned"]
+  };
+
+  var headers = headersMap[sheetName];
+  if (!headers) {
+    var keysSet = {};
+    for (var i = 0; i < list.length; i++) {
+      var keys = Object.keys(list[i]);
+      for (var k = 0; k < keys.length; k++) {
+        keysSet[keys[k]] = true;
+      }
+    }
+    headers = Object.keys(keysSet);
+  }
+
   sheet.appendRow(headers);
   var values = [];
   for (var i = 0; i < list.length; i++) {
@@ -373,6 +393,7 @@ function writeSheetData(sheetName, list) {
 
         const parsedAnnouncements: Announcement[] = (d.announcements || []).map((a: any) => ({
           announcementId: String(a.announcementId || ''),
+          type: (a.type === 'news' || a.type === 'internal') ? a.type : 'internal',
           title: String(a.title || ''),
           content: String(a.content || ''),
           createdBy: String(a.createdBy || ''),
@@ -624,9 +645,7 @@ function writeSheetData(sheetName, list) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Left Column containing Branch Config AND User Config */}
-        <div className="lg:col-span-2 space-y-4">
+      <div className="space-y-4 max-w-5xl mx-auto">
           
           {/* Branch / Center Information Panel */}
           <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-xs">
@@ -1125,61 +1144,6 @@ function writeSheetData(sheetName, list) {
             </div>
           </div>
         </div>
-
-        {/* Dynamic User Permissions Simulator switcher */}
-        <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-xs h-fit space-y-4">
-          <div className="flex items-center gap-1.5 text-gray-800 font-bold text-xs uppercase border-b border-gray-100 pb-2">
-            <Users className="h-4 w-4 text-emerald-600" />
-            <span>Chuyển đổi Trực Bản nhanh</span>
-          </div>
-
-          <div className="rounded-lg bg-emerald-50/20 p-3 text-xs text-emerald-800 border border-emerald-50">
-            Click vào tên bất kỳ để thay đổi vai trò đang hạch toán ngay lập tức (không cần gõ mật khẩu để rút ngắn thời gian kiểm thử):
-          </div>
-
-          <div className="space-y-2">
-            {users.map((u) => {
-              const isCurrent = u.username === currentUser;
-              return (
-                <button
-                  key={u.username}
-                  onClick={() => {
-                    if (u.isActive) {
-                      onSwitchUser(u.username);
-                    } else {
-                      alert('Tài khoản này đang bị khóa, không thể chuyển đổi nhanh!');
-                    }
-                  }}
-                  className={`w-full text-left rounded-xl p-3 border transition-all flex items-center justify-between cursor-pointer ${isCurrent ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-100' : 'bg-gray-50/30 text-gray-700 border-gray-100 hover:bg-gray-50/90'} ${!u.isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div>
-                    <p className={`text-xs font-bold ${isCurrent ? 'text-white' : 'text-gray-900'}`}>{u.fullName}</p>
-                    <p className={`text-[10px] ${isCurrent ? 'text-emerald-100' : 'text-gray-400'}`}>Mã đăng nhập: {u.username}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {!u.isActive && <span className="text-[8px] bg-rose-100 text-rose-700 px-1 rounded">Lock</span>}
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${isCurrent ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {u.role}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="pt-2 border-t border-gray-100">
-            <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
-              <Shield className="h-3 w-3" /> Chi tiết phân cấp vai trò
-            </h4>
-            <ul className="text-[10px] text-gray-500 space-y-1.5 mt-2.5 list-disc pl-3 font-medium">
-              <li><strong className="text-gray-700">SUPER_ADMIN</strong>: Toàn quyền, cấu hình hệ thống, mở khóa tháng đã chốt.</li>
-              <li><strong className="text-gray-700">ADMIN</strong>: Quản lý võ sinh, thu học phí đóng, xuất hóa đơn, xuất file chuyển GV.</li>
-              <li><strong className="text-gray-700">STAFF</strong>: Phụ trách tạo thông báo, xem danh sách, xác định doanh số thù lao nhưng không được thu phí / thay đổi học viên.</li>
-              <li><strong className="text-gray-700">VIEWER</strong>: Quyền xem học phí, thích hợp đại diện phụ huynh / thanh tra võ quán.</li>
-            </ul>
-          </div>
-        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

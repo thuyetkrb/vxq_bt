@@ -353,12 +353,14 @@ export default function App() {
           parsed.googleScriptsId === 'AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q' ||
           parsed.googleScriptsUrl.includes('AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q') ||
           parsed.googleScriptsId === 'AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ' ||
-          parsed.googleScriptsUrl.includes('AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ')
+          parsed.googleScriptsUrl.includes('AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ') ||
+          parsed.googleScriptsId === 'AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A' ||
+          parsed.googleScriptsUrl.includes('AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A')
         ) {
           parsed = {
             ...parsed,
-            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A/exec',
-            googleScriptsId: 'AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A'
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A/exec',
+            googleScriptsId: 'AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A'
           };
           needsSave = true;
         }
@@ -514,6 +516,7 @@ export default function App() {
               if (d.announcements && Array.isArray(d.announcements)) {
                 const parsedAnnouncements = d.announcements.map((a: any) => ({
                   announcementId: String(a.announcementId || ''),
+                  type: (a.type === 'news' || a.type === 'internal') ? a.type : 'internal',
                   title: String(a.title || ''),
                   content: String(a.content || ''),
                   createdBy: String(a.createdBy || ''),
@@ -1595,12 +1598,26 @@ export default function App() {
                 return (
                   <div className="space-y-6">
                     {/* Title and Top Description */}
-                    <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
-                      <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
-                      <p className="text-xs text-emerald-800/80 mt-1">
-                        Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
-                      </p>
-                    </div>
+                    {!isLoggedIn ? (
+                      <div className="bg-white rounded-xl border border-emerald-100 p-8 text-center max-w-md mx-auto space-y-4 shadow-3xs">
+                        <div className="mx-auto w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100 text-emerald-700">
+                          <GraduationCap className="h-6 w-6" />
+                        </div>
+                        <h3 className="text-emerald-950 font-extrabold text-[11px] uppercase tracking-widest font-sans">
+                          VÕ QUÁN NAM ANH QUANG - VXQ BÌNH TÂN
+                        </h3>
+                        <p className="text-xs text-emerald-800/80 leading-relaxed font-semibold">
+                          Chào mừng quý vị đến với hệ thống hạch toán học phí nội bộ. Vui lòng đăng nhập từ thanh công cụ phía trên để truy cập chức năng và dữ liệu báo cáo.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
+                        <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
+                        <p className="text-xs text-emerald-800/80 mt-1">
+                          Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Top Simple Counters Grid */}
                     {isLoggedIn && (
