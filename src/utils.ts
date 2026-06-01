@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
 /**
  * Formats a number as Vietnamese Dong (VND)
  * e.g., 1500000 -> "1.500.000 ₫"
@@ -71,3 +74,62 @@ export function buildFilename(prefix: string, ext: 'csv' | 'xlsx' | 'pdf' | 'png
   const dateStr = !month && !year ? `_${new Date().toISOString().split('T')[0].replace(/-/g, '_')}` : '';
   return `${prefix}${mStr}${yStr}${dateStr}.${ext}`;
 }
+
+/**
+ * Export HTML element to PDF
+ */
+export async function exportElementToPDF(elementId: string, filename: string, landscape: boolean = true) {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error(`Element with id ${elementId} not found`);
+    return;
+  }
+
+  try {
+    const originalStyle = element.style.cssText;
+    
+    // Temporarily ensure element layout is visible
+    element.style.overflow = 'visible';
+    
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
+
+    element.style.cssText = originalStyle;
+
+    const imgData = canvas.toDataURL('image/png');
+    
+    const pdf = new jsPDF({
+      orientation: landscape ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = landscape ? 297 : 210;
+    const pageHeight = landscape ? 210 : 297;
+    
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    heightLeft -= pageHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+    }
+
+    pdf.save(filename);
+  } catch (error) {
+    console.error('Lỗi khi xuất PDF:', error);
+  }
+}
+

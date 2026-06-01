@@ -23,7 +23,7 @@ import {
   Clock
 } from 'lucide-react';
 import { BankTransfer, Student, UserRole } from '../types';
-import { formatVND, exportToCSV, buildFilename } from '../utils';
+import { formatVND, exportToCSV, buildFilename, exportElementToPDF } from '../utils';
 
 interface BankTransferViewProps {
   transfers: BankTransfer[];
@@ -209,7 +209,7 @@ export default function BankTransferView({
   };
 
   return (
-    <div className="space-y-4 font-sans">
+    <div id="bank-transfers-container" className="space-y-4 font-sans p-2">
       {/* Header titles */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -223,7 +223,7 @@ export default function BankTransferView({
         </div>
 
         {/* Create new transaction button trigger */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto" data-html2canvas-ignore="true">
           <button
             type="button"
             onClick={handleExportCSV}
@@ -232,16 +232,17 @@ export default function BankTransferView({
           >
             <Download className="h-3.5 w-3.5 text-gray-500" /> Xuất Excel
           </button>
+
+          <button
+            type="button"
+            onClick={() => exportElementToPDF('bank-transfers-container', buildFilename('so_chuyen_khoan_ngan_hang', 'pdf'))}
+            className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-3xs cursor-pointer"
+            title="Xuất file PDF"
+          >
+            <Download className="h-3.5 w-3.5 text-white/90" /> Xuất PDF
+          </button>
           
-          {!showAddForm && !editingTransfer && (
-            <button
-              type="button"
-              onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-all shadow-md shadow-emerald-200 cursor-pointer"
-            >
-              <Plus className="h-4 w-4" /> Ghi nhận phiếu chuyển khoản
-            </button>
-          )}
+          {/* Ghi nhận phiếu chuyển khoản button removed */}
         </div>
       </div>
 
@@ -457,7 +458,7 @@ export default function BankTransferView({
                   <th className="px-4 py-2.5 text-right">Số Tiền</th>
                   <th className="px-4 py-2.5">Nội Dung</th>
                   <th className="px-4 py-2.5 text-center">Kế Toán</th>
-                  <th className="px-4 py-2.5 text-center">Thao Tác</th>
+                  <th className="px-4 py-2.5 text-center" data-html2canvas-ignore="true">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-150/60 font-medium">
@@ -507,7 +508,7 @@ export default function BankTransferView({
                       </td>
 
                       {/* Edit Delete buttons for Admin */}
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-4 py-2.5 text-center" data-html2canvas-ignore="true">
                         <div className="inline-flex items-center gap-1">
                           <button
                             type="button"
@@ -539,7 +540,8 @@ export default function BankTransferView({
                   <td className="px-4 py-3 font-mono font-black text-[12px] text-emerald-800 text-right">
                     {formatVND(totalTransferFunds)}
                   </td>
-                  <td colSpan={3} className="px-4 py-3"></td>
+                  <td colSpan={2} className="px-4 py-3"></td>
+                  <td className="px-4 py-3" data-html2canvas-ignore="true"></td>
                 </tr>
               </tfoot>
             </table>

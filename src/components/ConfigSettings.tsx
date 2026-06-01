@@ -426,6 +426,70 @@ function writeSheetData(sheetName, list) {
     }
   };
 
+  const handleBackupDownload = async () => {
+    setSyncStatus('loading');
+    setSyncMessage('Đang kết nối để tải dữ liệu sao lưu (backup)...');
+    try {
+      let backupData: any = null;
+      let pulledFromSheets = false;
+
+      if (googleScriptsUrl) {
+        try {
+          if (!googleScriptsUrl.includes('/edit') && !googleScriptsUrl.includes('/home/projects')) {
+            const resp = await fetch(`${googleScriptsUrl}?action=fetch`, { method: 'GET', redirect: 'follow' });
+            if (resp.ok) {
+              const result = await resp.json();
+              if (result.status === 'success' && result.data) {
+                backupData = result.data;
+                pulledFromSheets = true;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Could not fetch remote sheet for backup, falling back to local data", err);
+        }
+      }
+
+      if (!backupData) {
+        // Fallback to current memory data
+        backupData = {
+          users,
+          students,
+          tuitionPayments: payments,
+          bankTransfers,
+          announcements
+        };
+      }
+
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      
+      const cleanCenterName = (config.centerName || 'Nam_Anh_Quang').replace(/[^a-zA-Z0-9]/g, '_');
+      const dateStr = new Date().toISOString().substring(0, 10).replace(/-/g, '_');
+      const timeStr = new Date().toTimeString().substring(0, 8).replace(/:/g, '');
+      link.href = url;
+      link.download = `backup_csdl_${cleanCenterName}_${dateStr}_${timeStr}.json`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setSyncStatus('success');
+      setSyncMessage(
+        `Đã xuất file sao lưu thành công tải về máy! ` +
+        (pulledFromSheets 
+          ? `Tải trọn vẹn dữ liệu từ Google Sheets làm bản sao lưu.` 
+          : `Đã sao lưu tệp dữ liệu hoạt động tạm trên máy của bạn (Offline JSON Backup).`)
+      );
+    } catch (e: any) {
+      setSyncStatus('error');
+      setSyncMessage(`Lỗi trong lúc xuất tệp cấu trúc sao lưu: ${e.message}`);
+    }
+  };
+
   const handleSyncPush = async () => {
     if (!googleScriptsUrl) {
       setSyncStatus('error');
@@ -891,6 +955,16 @@ function writeSheetData(sheetName, list) {
 
             {/* Sync trigger actions */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handleBackupDownload}
+                disabled={syncStatus === 'loading'}
+                className="flex items-center justify-center gap-1.5 font-bold text-sky-850 bg-sky-50 hover:bg-sky-100 disabled:opacity-50 border border-sky-200 px-4 py-2 rounded-lg transition cursor-pointer"
+              >
+                <Database className="h-4 w-4 text-sky-600" />
+                💾 Sao lưu CSDL (BACKUP)
+              </button>
+
               <button
                 type="button"
                 onClick={handleSyncTest}

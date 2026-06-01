@@ -23,6 +23,7 @@ import {
   ChevronRight,
   LogOut,
   UserCheck,
+  Gift,
   Download,
   Key,
   Lock,
@@ -71,7 +72,7 @@ import {
   INITIAL_BANK_TRANSFERS
 } from './initialData';
 
-import { formatVND, exportToCSV, getMonthName, buildFilename } from './utils';
+import { formatVND, exportToCSV, getMonthName, buildFilename, exportElementToPDF } from './utils';
 
 const getMonthRange = (currentM: number, currentY: number, beforeCount: number, afterCount: number) => {
   const range = [];
@@ -102,6 +103,17 @@ const getMonthRange = (currentM: number, currentY: number, beforeCount: number, 
   }
   
   return range;
+};
+
+const formatDateCompact = (dateStr?: string) => {
+  if (!dateStr) return '';
+  const cleanDate = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parts = cleanDate.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
+  }
+  return dateStr;
 };
 
 // Import our modular components
@@ -189,8 +201,12 @@ export default function App() {
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
 
   // Calendar Period (Accounting month and year)
-  const [currentMonth, setCurrentMonth] = useState<number>(5); // May
-  const [currentYear, setCurrentYear] = useState<number>(2026);
+  const [currentMonth, setCurrentMonth] = useState<number>(() => {
+    return new Date().getMonth() + 1;
+  });
+  const [currentYear, setCurrentYear] = useState<number>(() => {
+    return new Date().getFullYear();
+  });
 
   // States fetched/stored in Local Storage
   const [classes, setClasses] = useState<Class[]>(() => INITIAL_CLASSES);
@@ -222,6 +238,7 @@ export default function App() {
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [expandedStudentIds, setExpandedStudentIds] = useState<string[]>([]);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
   const [isFreeExempt, setIsFreeExempt] = useState(false);
@@ -1533,7 +1550,7 @@ export default function App() {
           {/* Quick Active user selection & Signout indicator */}
           <div className="flex items-center gap-3.5 self-end sm:self-auto select-none no-print">
             {/* Live Database Connectivity indicator badge */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-100/60 bg-white text-emerald-950 text-[10px] font-semibold shadow-3xs cursor-pointer select-none" title="Trạng thái kết nối Google Sheets" onClick={() => setActiveTab('config')}>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-100/60 bg-white text-emerald-950 text-[10px] font-semibold shadow-3xs cursor-pointer select-none" title="Trạng thái kết nối Database" onClick={() => setActiveTab('config')}>
               {dbHealth === 'checking' && (
                 <>
                   <span className="flex h-1.5 w-1.5 relative">
@@ -1546,7 +1563,7 @@ export default function App() {
               {dbHealth === 'connected' && (
                 <>
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  <span className="text-emerald-800">Google Sheets: Đã kết nối</span>
+                  <span className="text-emerald-800">Database: Đã kết nối</span>
                 </>
               )}
               {dbHealth === 'error' && (
@@ -1555,7 +1572,7 @@ export default function App() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-600"></span>
                   </span>
-                  <span className="text-rose-700">Google Sheets: Lỗi kết nối</span>
+                  <span className="text-rose-700">Database: Lỗi kết nối</span>
                 </>
               )}
               {dbHealth === 'noconfig' && (
@@ -1740,8 +1757,30 @@ export default function App() {
                   ============================================================== */}
               {activeTab === 'dashboard' && (() => {
                 const isAdminOrSuperAdmin = isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN');
+                const exemptAndFreeStudents = students.filter(s => {
+                  if (s.activeStatus !== 'Active') return false;
+                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+                  if (curPay && curPay.paidStatus === 'Exempted') return true;
+                  if (s.tuitionFee <= 0) return true;
+                  return false;
+                });
+                const exemptAndFreeCount = exemptAndFreeStudents.length;
+
+                const paidStudents = students.filter(s => {
+                  if (s.activeStatus !== 'Active') return false;
+                  if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
+                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+                  return curPay && curPay.paidStatus === 'Paid';
+                });
+
+                const unpaidStudents = students.filter(s => {
+                  if (s.activeStatus !== 'Active') return false;
+                  if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
+                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+                  return !curPay || curPay.paidStatus === 'Unpaid';
+                });
                 return (
-                  <div className="space-y-6">
+                  <div id="dashboard-container" className="space-y-6">
                     {/* Title and Top Description */}
                     {!isLoggedIn ? (
                       <div className="bg-white rounded-xl border border-emerald-100 p-8 text-center max-w-md mx-auto space-y-4 shadow-3xs">
@@ -1766,7 +1805,7 @@ export default function App() {
 
                     {/* Top Simple Counters Grid */}
                     {isLoggedIn && (
-                      <div className={`grid grid-cols-2 gap-2.5 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
+                      <div className={`grid grid-cols-2 gap-2.5 ${isAdminOrSuperAdmin ? 'sm:grid-cols-3 lg:grid-cols-6' : 'sm:grid-cols-3'}`}>
                         {/* Stat Active Students */}
                         <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                           <div>
@@ -1776,6 +1815,18 @@ export default function App() {
                           </div>
                           <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
                             <Users className="h-4 w-4" />
+                          </div>
+                        </div>
+
+                        {/* Stat Exempt and Free Students */}
+                        <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
+                          <div>
+                            <p className="text-[9px] font-bold text-cyan-800 uppercase tracking-wider font-sans">Miễn phí/ Vắng</p>
+                            <h3 className="text-sm font-black text-cyan-950 mt-0.5">{exemptAndFreeCount} võ sinh</h3>
+                            <p className="text-[8.5px] text-cyan-600 font-bold mt-0.5">Được miễn, hoặc vắng, hoặc chưa tham gia</p>
+                          </div>
+                          <div className="h-8 w-8 rounded-lg bg-cyan-50 text-cyan-700 flex items-center justify-center shrink-0">
+                            <Gift className="h-4 w-4" />
                           </div>
                         </div>
 
@@ -1810,7 +1861,7 @@ export default function App() {
                               <div>
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans font-sans font-sans">Đã chuyển tháng {currentMonth}</p>
                                 <h3 className="text-sm font-black text-sky-850 mt-0.5">{formatVND(currentBankTransferSum)}</h3>
-                                <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans font-sans font-sans">Hạch toán chuyển khoản</p>
+                                <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans">CK Thầy ( {bankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).length} lần )</p>
                               </div>
                               <div className="h-8 w-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
                                 <Landmark className="h-4 w-4" />
@@ -1845,6 +1896,88 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Compact List of Students by Tuition Status */}
+                    {isLoggedIn && (
+                      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-3xs space-y-3 font-sans">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-[11px] font-extrabold text-emerald-950 uppercase tracking-wider flex items-center gap-1">
+                            <span>📋 Chi tiết học phí tháng {currentMonth}</span>
+                          </h4>
+                          <span className="text-[9px] text-gray-400 italic font-mono font-bold">Tổng cộng {students.filter(s => s.activeStatus === 'Active').length} võ sinh active</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {/* Miễn phí / Vắng */}
+                          <div className="bg-cyan-50/10 border border-cyan-100/50 rounded-lg p-2.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-cyan-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                                Miễn phí/ Vắng ({exemptAndFreeCount})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                              {exemptAndFreeStudents.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {exemptAndFreeStudents.map(s => (
+                                    <span key={s.studentId} className="bg-cyan-50 border border-cyan-100 px-1.5 py-0.5 rounded text-cyan-800 font-bold">
+                                      {s.fullName}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">Không có võ sinh</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Đã đóng học phí */}
+                          <div className="bg-emerald-50/10 border border-emerald-100/50 rounded-lg p-2.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Đã đóng học phí ({paidStudents.length})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                              {paidStudents.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {paidStudents.map(s => (
+                                    <span key={s.studentId} className="bg-[#e0ffd5] border border-[#a2ffa0]/50 px-1.5 py-0.5 rounded text-[#1c640e] font-bold">
+                                      {s.fullName}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">Chưa ghi nhận ai đóng</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Còn lại / Chờ thu */}
+                          <div className="bg-rose-50/10 border border-rose-100/50 rounded-lg p-2.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                Còn lại / Chờ thu ({unpaidStudents.length})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                              {unpaidStudents.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {unpaidStudents.map(s => (
+                                    <span key={s.studentId} className="bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded text-rose-800 font-bold">
+                                      {s.fullName}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">Đã thu đủ hoặc đang trống</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -1920,8 +2053,6 @@ export default function App() {
                               <tr>
                                 <th className="px-3 py-3 font-semibold text-center border-r border-gray-100">ID</th>
                                 <th className="px-4 py-3 font-bold border-r border-gray-100">Họ & Tên Võ Sinh</th>
-                                <th className="px-3 py-3 border-r border-gray-100">SĐT Võ Sinh</th>
-                                <th className="px-3 py-3 border-r border-gray-100">Phụ Huynh / SĐT</th>
                                 {computedRange.map(item => {
                                   const isCurrent = item.month === currentMonth && item.year === currentYear;
                                   return (
@@ -1945,7 +2076,7 @@ export default function App() {
                                 return matchSearch && matchStatus;
                               }).length === 0 ? (
                                 <tr>
-                                  <td colSpan={4 + computedRange.length} className="px-4 py-8 text-center text-gray-400">
+                                  <td colSpan={2 + computedRange.length} className="px-4 py-8 text-center text-gray-400">
                                     Không tìm thấy võ sinh nào hoạt động thỏa mãn tìm kiếm.
                                   </td>
                                 </tr>
@@ -1962,13 +2093,6 @@ export default function App() {
                                       <td className="px-3 py-3.5 font-mono text-[9.5px] text-gray-400 text-center border-r border-gray-100 font-bold">{st.studentId}</td>
                                       <td className="px-4 py-3.5 font-bold text-gray-900 border-r border-gray-100">
                                         <p>{st.fullName}</p>
-                                      </td>
-                                      <td className="px-3 py-3.5 font-mono text-[11px] text-gray-700 border-r border-gray-100">
-                                        {st.phone || <span className="text-gray-300 italic font-normal text-[10px]">Trống</span>}
-                                      </td>
-                                      <td className="px-3 py-3.5 border-r border-gray-100 text-gray-600">
-                                        <p className="font-semibold text-[11.5px]">{st.parentName}</p>
-                                        <span className="text-[10px] text-gray-405 font-mono">{st.parentPhone}</span>
                                       </td>
                                       {computedRange.map(item => {
                                         const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
@@ -2064,7 +2188,7 @@ export default function App() {
                             <tfoot className="bg-emerald-50/15 border-t border-gray-200 font-bold select-none text-gray-800">
                               {/* Row 1: Tổng học phí theo tháng */}
                               <tr className="bg-slate-50/50 border-b border-gray-100/80">
-                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
+                                <td colSpan={2} className="px-4 py-3 text-right font-black text-[10px] text-emerald-950 uppercase tracking-wide">
                                   Tổng học phí theo tháng
                                 </td>
                                 {computedRange.map(item => {
@@ -2102,7 +2226,7 @@ export default function App() {
 
                               {/* Row 2: Đã chuyển khoản */}
                               <tr className="bg-sky-50/10 border-b border-gray-100/80">
-                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-sky-950 uppercase tracking-wide">
+                                <td colSpan={2} className="px-4 py-3 text-right font-black text-[10px] text-sky-950 uppercase tracking-wide">
                                   Đã chuyển khoản
                                 </td>
                                 {computedRange.map(item => {
@@ -2120,7 +2244,7 @@ export default function App() {
 
                               {/* Row 3: Còn lại */}
                               <tr className="bg-rose-50/10 border-b border-gray-100/80">
-                                <td colSpan={4} className="px-4 py-3 text-right font-black text-[10px] text-rose-950 uppercase tracking-wide">
+                                <td colSpan={2} className="px-4 py-3 text-right font-black text-[10px] text-rose-950 uppercase tracking-wide">
                                   Còn lại
                                 </td>
                                 {computedRange.map(item => {
@@ -2183,7 +2307,20 @@ export default function App() {
                       </p>
                     </div>
                   ) : null}
-                </div>
+
+                    {/* PDF Export Section */}
+                    {isLoggedIn && (
+                      <div className="flex justify-end no-print pt-2" data-html2canvas-ignore="true">
+                        <button
+                          type="button"
+                          onClick={() => exportElementToPDF('dashboard-container', buildFilename('bao_cao_tong_quan', 'pdf'))}
+                          className="flex items-center gap-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 px-4 py-2.5 rounded-xl transition-all shadow-3xs hover:shadow-2xs cursor-pointer"
+                        >
+                          <Download className="h-4 w-4" /> Xuất PDF Tổng Quan (A4 Landscape)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })()}
 
@@ -2192,7 +2329,7 @@ export default function App() {
                   MODULE 4: STUDENT MANAGEMENT SCREEN
                   ============================================================== */}
               {activeTab === 'students' && (
-                <div className="space-y-4">
+                <div id="students-container" className="space-y-4 p-2">
                   {/* Header page student control */}
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -2200,12 +2337,19 @@ export default function App() {
                       <p className="text-xs text-gray-500 mt-1">Cập nhật sỹ số võ sinh, thông tin cha mẹ, chiết khấu phần trăm ưu đãi và địa chỉ nhà.</p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2" data-html2canvas-ignore="true">
                       <button
                         onClick={handleExportStudents}
                         className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/70 transition cursor-pointer"
                       >
                         <Download className="h-4 w-4" /> Xuất Excel / CSV
+                      </button>
+
+                      <button
+                        onClick={() => exportElementToPDF('students-container', buildFilename('danh_sach_vo_sinh', 'pdf'))}
+                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
+                      >
+                        <Download className="h-4 w-4" /> Xuất PDF
                       </button>
 
                       {currentUser.role !== 'VIEWER' && (
@@ -2222,8 +2366,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Filters and search blocks */}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-gray-100 bg-white p-4 shadow-2xs">
+                   {/* Filters and search blocks */}
+                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-gray-100 bg-white p-4 shadow-2xs" data-html2canvas-ignore="true">
                     {/* Search student input */}
                     <div className="relative sm:col-span-3">
                       <Search className="absolute top-2.5 left-3 h-4 w-4 text-gray-400" />
@@ -2256,11 +2400,10 @@ export default function App() {
                           <tr>
                             <th className="px-4 py-3">Danh xưng ID</th>
                             <th className="px-4 py-3">Họ và Tên Võ Sinh</th>
-                            <th className="px-4 py-3">SĐT Võ Sinh</th>
                             <th className="px-4 py-3">Phụ huynh & SĐT</th>
                             <th className="px-4 py-3">Học phí mỗi tháng</th>
                             <th className="px-4 py-3">Ngày nhập học</th>
-                            <th className="px-4 py-3">Hành động</th>
+                            <th className="px-4 py-3" data-html2canvas-ignore="true">Hành động</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -2272,7 +2415,7 @@ export default function App() {
                             return matchSearch && matchStatus;
                           }).length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                                 Không tìm thấy hồ sơ võ sinh nào khớp với tiêu chuẩn đề ra.
                               </td>
                             </tr>
@@ -2284,47 +2427,122 @@ export default function App() {
                               const matchStatus = s.activeStatus === statusFilterStudent;
                               return matchSearch && matchStatus;
                             }).map((st) => {
+                              const isExpanded = expandedStudentIds.includes(st.studentId);
                               return (
-                                <tr key={st.studentId} className="hover:bg-gray-50/50 transition-colors">
-                                  <td className="px-4 py-3 font-mono text-[10px] text-gray-400 font-bold">{st.studentId}</td>
-                                  <td className="px-4 py-3">
-                                    <p className="font-bold text-gray-950 text-xs">{st.fullName}</p>
-                                    <span className="text-[10px] text-emerald-800 italic">Gọi tên: {st.nickname || 'Không'}</span>
-                                  </td>
-                                  <td className="px-4 py-3 font-semibold text-gray-700">
-                                    {st.phone || <span className="text-gray-300 italic font-normal">Chưa cập nhật</span>}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <p className="font-semibold text-gray-700">{st.parentName}</p>
-                                    <span className="text-[10px] text-gray-400 font-bold">{st.parentPhone}</span>
-                                  </td>
-                                  <td className="px-4 py-3 font-extrabold text-[#111827]">{formatVND(st.tuitionFee)}</td>
-                                  <td className="px-4 py-3 text-gray-400 font-mono">{st.enrollmentDate}</td>
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center gap-1.5">
-                                      <button
-                                        onClick={() => {
-                                          setEditingStudent(st);
-                                          setIsStudentModalOpen(true);
-                                        }}
-                                        className="rounded border border-gray-200 bg-white p-1 text-gray-500 hover:text-emerald-700 cursor-pointer"
-                                        title="Chỉnh hồ sơ học sinh"
-                                      >
-                                        <Edit className="h-3.5 w-3.5" />
-                                      </button>
-                                      
-                                      {currentUser.role !== 'VIEWER' && st.activeStatus === 'Active' && (
+                                <React.Fragment key={st.studentId}>
+                                  <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-100">
+                                    <td className="px-4 py-3 font-mono text-[10px] text-gray-400 font-bold">{st.studentId}</td>
+                                    <td className="px-4 py-3">
+                                      <p className="font-bold text-gray-950 text-xs">{st.fullName}</p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <p className="font-semibold text-gray-700">{st.parentName}</p>
+                                      <span className="text-[10px] text-gray-400 font-bold">{st.parentPhone}</span>
+                                    </td>
+                                    <td className="px-4 py-3 font-extrabold text-[#111827]">{formatVND(st.tuitionFee)}</td>
+                                    <td className="px-4 py-3 text-gray-400 font-mono">{formatDateCompact(st.enrollmentDate)}</td>
+                                    <td className="px-4 py-3" data-html2canvas-ignore="true">
+                                      <div className="flex items-center gap-1.5">
                                         <button
-                                          onClick={() => handleArchiveStudent(st)}
-                                          className="rounded border border-red-100 bg-red-50/50 p-1 text-red-500 hover:bg-rose-100 cursor-pointer"
-                                          title="Tạm ngừng học"
+                                          onClick={() => {
+                                            setExpandedStudentIds(prev => 
+                                              prev.includes(st.studentId)
+                                                ? prev.filter(id => id !== st.studentId)
+                                                : [...prev, st.studentId]
+                                            );
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-extrabold border transition-all cursor-pointer ${
+                                            isExpanded
+                                              ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                              : 'bg-emerald-50/60 border-emerald-100 text-emerald-800 hover:bg-emerald-100/50'
+                                          }`}
                                         >
-                                          <UserMinus className="h-3.5 w-3.5" />
+                                          {isExpanded ? 'Thu gọn' : 'Xem thêm'}
                                         </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
+
+                                        <button
+                                          onClick={() => {
+                                            setEditingStudent(st);
+                                            setIsStudentModalOpen(true);
+                                          }}
+                                          className="rounded border border-gray-200 bg-white p-1 text-gray-500 hover:text-emerald-700 cursor-pointer"
+                                          title="Chỉnh hồ sơ học sinh"
+                                        >
+                                          <Edit className="h-3.5 w-3.5" />
+                                        </button>
+                                        
+                                        {currentUser.role !== 'VIEWER' && st.activeStatus === 'Active' && (
+                                          <button
+                                            onClick={() => handleArchiveStudent(st)}
+                                            className="rounded border border-red-100 bg-red-50/50 p-1 text-red-500 hover:bg-rose-100 cursor-pointer"
+                                            title="Tạm ngừng học"
+                                          >
+                                            <UserMinus className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  
+                                  {isExpanded && (
+                                    <tr className="bg-emerald-50/15 border-b border-emerald-100/50">
+                                      <td colSpan={6} className="p-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Biệt danh / Nickname</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.nickname || 'Không có'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Ngày sinh</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.dateOfBirth || 'Không rõ'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Giới tính</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">
+                                              {st.gender === 'Male' ? 'Nam' : st.gender === 'Female' ? 'Nữ' : 'Khác'}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Lớp học ID</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.classId || 'Chưa xếp lớp'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">SĐT Võ sinh</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.phone || 'Không có'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Email Phụ huynh</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.email || 'Không có'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Mức miễn giảm / Chiết khấu</p>
+                                            <p className="font-semibold text-emerald-800 mt-0.5">
+                                              {st.discount > 0 ? `${st.discount}%` : 'Không có'}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Trạng thái hồ sơ</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">
+                                              {st.activeStatus === 'Active' ? 'Đang đi học' : st.activeStatus === 'Inactive' ? 'Tạm đóng' : 'Lưu trữ'}
+                                            </p>
+                                          </div>
+                                          <div className="col-span-2 md:col-span-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Địa chỉ nhà</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.address || 'Chưa cập nhật'}</p>
+                                          </div>
+                                          <div className="col-span-2 md:col-span-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Ghi chú học viên</p>
+                                            <p className="text-gray-700 italic mt-0.5 whitespace-pre-line">{st.note || 'Không có ghi chú nào.'}</p>
+                                          </div>
+                                          <div className="col-span-2 md:col-span-4 text-[9px] text-gray-450 font-mono mt-1 pt-1.5 border-t border-gray-100 flex justify-between select-none">
+                                            <span>Ngày tạo hồ sơ: {new Date(st.createdAt).toLocaleString('vi-VN')}</span>
+                                            <span>Cập nhật cuối: {new Date(st.updatedAt).toLocaleString('vi-VN')}</span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })
                           )}
@@ -2515,7 +2733,7 @@ export default function App() {
                   MODULE 5: TUITION MANAGEMENT SCREEN
                   ============================================================== */}
               {activeTab === 'tuition' && (
-                <div className="space-y-4">
+                <div id="tuition-container" className="space-y-4 p-2">
                   {/* Page header */}
                   <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -2523,12 +2741,19 @@ export default function App() {
                       <p className="text-xs text-gray-500 mt-1">Hệ thống tạo hạch toán học phí hàng tháng tự động. Thu tiền mặt hoặc ngân hàng tiện lợi.</p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2" data-html2canvas-ignore="true">
                       <button
                         onClick={handleExportTuitionReport}
                         className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/70 transition cursor-pointer shadow-2xs"
                       >
                         <FileSpreadsheet className="h-4 w-4" /> Xuất bảng kê (Học phí)
+                      </button>
+
+                      <button
+                        onClick={() => exportElementToPDF('tuition-container', buildFilename('so_chi_tiet_hoc_phi', 'pdf'))}
+                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
+                      >
+                        <Download className="h-4 w-4" /> Xuất dạng PDF
                       </button>
                     </div>
                   </div>
@@ -2545,7 +2770,7 @@ export default function App() {
                             <th className="px-4 py-3.5">Nghĩa vụ học phí</th>
                             <th className="px-4 py-3.5">Biên Lai hóa đơn</th>
                             <th className="px-4 py-3.5">Trạng thái thu phí</th>
-                            <th className="px-4 py-3.5 text-right">Thao tác thu đóng</th>
+                            <th className="px-4 py-3.5 text-right" data-html2canvas-ignore="true">Thao tác thu đóng</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -2586,12 +2811,12 @@ export default function App() {
                                       <span className="text-gray-400 text-[10px] italic">Chờ xuất phiếu...</span>
                                     )}
                                   </td>
-                                  <td className="px-4 py-3.5 select-none">
+                                  <td className="px-4 py-3.5 text-[#1c640e] font-extrabold select-none">
                                     <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-extrabold ${pay.paidStatus === 'Paid' ? 'bg-[#e0ffd5] text-[#1c640e]' : pay.paidStatus === 'Exempted' ? 'bg-cyan-100 text-cyan-800' : 'bg-rose-100 text-rose-700 pulse-active'}`}>
                                       {pay.paidStatus === 'Paid' ? 'ĐÃ ĐÓNG SỔ (Paid)' : pay.paidStatus === 'Exempted' ? 'MIỄN HỌC PHÍ (Exempted)' : 'CHƯA ĐÓNG'}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3.5 text-right">
+                                  <td className="px-4 py-3.5 text-right" data-html2canvas-ignore="true">
                                     <div className="flex items-center justify-end gap-1.5">
                                       {pay.paidStatus === 'Paid' ? (
                                         <>
