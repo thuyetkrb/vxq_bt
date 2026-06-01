@@ -23,7 +23,7 @@ import {
   Clock
 } from 'lucide-react';
 import { BankTransfer, Student, UserRole } from '../types';
-import { formatVND, exportToCSV, buildFilename, exportElementToPDF } from '../utils';
+import { formatVND, exportToCSV, buildFilename, exportElementToJPG } from '../utils';
 
 interface BankTransferViewProps {
   transfers: BankTransfer[];
@@ -235,11 +235,11 @@ export default function BankTransferView({
 
           <button
             type="button"
-            onClick={() => exportElementToPDF('bank-transfers-container', buildFilename('so_chuyen_khoan_ngan_hang', 'pdf'))}
+            onClick={() => exportElementToJPG('bank-transfers-container', buildFilename('so_chuyen_khoan_ngan_hang', 'jpg'))}
             className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-3xs cursor-pointer"
-            title="Xuất file PDF"
+            title="Xuất file ảnh JPG"
           >
-            <Download className="h-3.5 w-3.5 text-white/90" /> Xuất PDF
+            <Download className="h-3.5 w-3.5 text-white/90" /> Xuất JPG
           </button>
           
           {!showAddForm && !editingTransfer && (

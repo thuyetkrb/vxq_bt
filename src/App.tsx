@@ -72,7 +72,7 @@ import {
   INITIAL_BANK_TRANSFERS
 } from './initialData';
 
-import { formatVND, exportToCSV, getMonthName, buildFilename, exportElementToPDF } from './utils';
+import { formatVND, exportToCSV, getMonthName, buildFilename, exportElementToJPG } from './utils';
 
 const getMonthRange = (currentM: number, currentY: number, beforeCount: number, afterCount: number) => {
   const range = [];
@@ -1696,12 +1696,12 @@ export default function App() {
     <div className="min-h-screen flex flex-col md:flex-row bg-emerald-50/45 text-emerald-950 font-sans">
       
       {/* ----------------- MOBILE TOPBAR ----------------- */}
-      <header className="md:hidden flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-3 sticky top-0 z-40 no-print">
+      <header className="md:hidden flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2 sticky top-0 z-40 no-print">
         <div className="flex items-center gap-2">
-          <span className="p-1 rounded-lg bg-emerald-600 text-white">
-            <Building className="h-4.5 w-4.5" />
+          <span className="w-8 h-8 rounded-full overflow-hidden border border-emerald-205 bg-white flex items-center justify-center shadow-3xs">
+            <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
-          <span className="font-bold text-xs tracking-tight text-emerald-950 uppercase">VXQ_PORTAL</span>
+          <span className="font-extrabold text-[11px] tracking-tight text-emerald-950 uppercase">Võ Quán Nam Anh Quang</span>
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1719,8 +1719,8 @@ export default function App() {
       `}>
         {/* Brand Banner */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-emerald-50/60 bg-emerald-50/10">
-          <span className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold shadow-xs">
-            <GraduationCap className="h-5 w-5 text-white" />
+          <span className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-emerald-200 bg-[#f0fdf4] shadow-xs select-none">
+            <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
           <div>
             <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">VXQ BÌNH TÂN</span>
@@ -2063,14 +2063,17 @@ export default function App() {
                   <div id="dashboard-container" className="space-y-6">
                     {/* Title and Top Description */}
                     {!isLoggedIn ? (
-                      <div className="bg-white rounded-xl border border-emerald-100 p-8 text-center max-w-md mx-auto space-y-4 shadow-3xs">
-                        <div className="mx-auto w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100 text-emerald-700">
-                          <GraduationCap className="h-6 w-6" />
+                      <div className="bg-white rounded-xl border border-emerald-100 p-8 text-center max-w-md mx-auto space-y-5 shadow-3xs animate-fade-in">
+                        <div className="mx-auto w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-200 bg-emerald-50 shadow-sm flex items-center justify-center">
+                          <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         </div>
-                        <h3 className="text-emerald-950 font-extrabold text-[11px] uppercase tracking-widest font-sans">
-                          VÕ QUÁN NAM ANH QUANG - VXQ BÌNH TÂN
-                        </h3>
-                        <p className="text-xs text-emerald-800/80 leading-relaxed font-semibold">
+                        <div>
+                          <h3 className="text-emerald-950 font-black text-sm uppercase tracking-wider font-sans">
+                            VÕ QUÁN NAM ANH QUANG
+                          </h3>
+                          <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono block mt-1">VXQ BÌNH TÂN</span>
+                        </div>
+                        <p className="text-xs text-emerald-800/85 leading-relaxed font-semibold bg-emerald-50/50 p-3 rounded-lg border border-emerald-100">
                           Chào mừng quý vị đến với hệ thống hạch toán học phí nội bộ. Vui lòng đăng nhập từ thanh công cụ phía trên để truy cập chức năng và dữ liệu báo cáo.
                         </p>
                       </div>
@@ -2588,15 +2591,15 @@ export default function App() {
                     </div>
                   ) : null}
 
-                    {/* PDF Export Section */}
+                    {/* JPG Export Section */}
                     {isLoggedIn && (
                       <div className="flex justify-end no-print pt-2" data-html2canvas-ignore="true">
                         <button
                           type="button"
-                          onClick={() => exportElementToPDF('dashboard-container', buildFilename('bao_cao_tong_quan', 'pdf'))}
+                          onClick={() => exportElementToJPG('dashboard-container', buildFilename('bao_cao_tong_quan', 'jpg'))}
                           className="flex items-center gap-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 px-4 py-2.5 rounded-xl transition-all shadow-3xs hover:shadow-2xs cursor-pointer"
                         >
-                          <Download className="h-4 w-4" /> Xuất PDF Tổng Quan (A4 Landscape)
+                          <Download className="h-4 w-4" /> Xuất JPG Tổng Quan
                         </button>
                       </div>
                     )}
@@ -2626,10 +2629,10 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => exportElementToPDF('students-container', buildFilename('danh_sach_vo_sinh', 'pdf'))}
+                        onClick={() => exportElementToJPG('students-container', buildFilename('danh_sach_vo_sinh', 'jpg'))}
                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
                       >
-                        <Download className="h-4 w-4" /> Xuất PDF
+                        <Download className="h-4 w-4" /> Xuất JPG
                       </button>
 
                       {currentUser.role !== 'VIEWER' && (
@@ -3030,10 +3033,10 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => exportElementToPDF('tuition-container', buildFilename('so_chi_tiet_hoc_phi', 'pdf'))}
+                        onClick={() => exportElementToJPG('tuition-container', buildFilename('so_chi_tiet_hoc_phi', 'jpg'))}
                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
                       >
-                        <Download className="h-4 w-4" /> Xuất dạng PDF
+                        <Download className="h-4 w-4" /> Xuất dạng JPG
                       </button>
                     </div>
                   </div>
@@ -3415,8 +3418,8 @@ export default function App() {
         {/* Persistent Võ Quán Profile Banner — Bên dưới trang web */}
         <footer className="no-print px-5 md:px-6 pb-6 pt-2 select-none">
           <div className="bg-[#f0fdf4] border border-emerald-100 rounded-2xl p-6 shadow-xs relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5 text-emerald-950 pointer-events-none hidden md:block">
-              <GraduationCap className="h-32 w-32" />
+            <div className="absolute top-0 right-2 p-4 opacity-10 pointer-events-none hidden md:block">
+              <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="h-[120px] w-[120px] object-contain rounded-full" referrerPolicy="no-referrer" />
             </div>
             <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-6">
               <div className="space-y-2.5">

@@ -68,7 +68,7 @@ export function getMonthName(month: number): string {
 /**
  * Custom file-name builder based on year, month, and requested type
  */
-export function buildFilename(prefix: string, ext: 'csv' | 'xlsx' | 'pdf' | 'png', month?: number, year?: number): string {
+export function buildFilename(prefix: string, ext: 'csv' | 'xlsx' | 'pdf' | 'png' | 'jpg' | 'jpeg', month?: number, year?: number): string {
   const mStr = month ? `_${String(month).padStart(2, '0')}` : '';
   const yStr = year ? `_${year}` : '';
   const dateStr = !month && !year ? `_${new Date().toISOString().split('T')[0].replace(/-/g, '_')}` : '';
@@ -170,6 +170,141 @@ function replaceOklchInCSS(cssText: string): string {
     index = i;
   }
   return result;
+}
+
+/**
+ * Export HTML element to JPG
+ */
+export async function exportElementToJPG(elementId: string, filename: string) {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error(`Element with id ${elementId} not found`);
+    alert(`Không tìm thấy vùng dữ liệu ID: ${elementId} để xuất ảnh JPG.`);
+    return;
+  }
+
+  // Visual feedback
+  const originalCursor = document.body.style.cursor;
+  document.body.style.cursor = 'wait';
+
+  const linkElements = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+  const styleElements = Array.from(document.querySelectorAll('style')) as HTMLStyleElement[];
+  const backups: { el: HTMLStyleElement | HTMLLinkElement; originalText?: string; tempStyle?: HTMLStyleElement }[] = [];
+
+  try {
+    // 1. Pre-fetch same-origin linked CSS rules and replace oklch patterns to avoid html2canvas parser crash
+    for (const link of linkElements) {
+      try {
+        const href = link.href;
+        if (href && (href.startsWith(window.location.origin) || !href.startsWith('http'))) {
+          const resp = await fetch(href);
+          if (resp.ok) {
+            const cssText = await resp.text();
+            if (cssText.includes('oklch')) {
+              const cleaned = replaceOklchInCSS(cssText);
+              const tempStyle = document.createElement('style');
+              tempStyle.setAttribute('data-pdf-fallback', 'true');
+              tempStyle.textContent = cleaned;
+              document.head.appendChild(tempStyle);
+
+              link.disabled = true;
+              backups.push({ el: link, tempStyle });
+            }
+          }
+        }
+      } catch (fe) {
+        console.warn('Failed to pre-clean linked stylesheet:', link.href, fe);
+      }
+    }
+
+    // 2. Scan and edit active in-document <style> tags
+    for (const style of styleElements) {
+      if (style.textContent && style.textContent.includes('oklch')) {
+        const originalText = style.textContent;
+        style.textContent = replaceOklchInCSS(originalText);
+        backups.push({ el: style, originalText });
+      }
+    }
+
+    const originalStyle = element.style.cssText;
+    element.style.overflow = 'visible';
+
+    const canvas = await html2canvas(element, {
+      scale: 2.0, // High definition JPG output
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      onclone: (clonedDoc) => {
+        const clonedElement = clonedDoc.getElementById(elementId);
+        if (clonedElement) {
+          clonedElement.style.overflow = 'visible';
+          clonedElement.style.maxHeight = 'none';
+          clonedElement.style.padding = '24px';
+          clonedElement.style.width = element.offsetWidth ? `${element.offsetWidth}px` : '1200px';
+        }
+
+        // Additional clean inside clone context
+        const clonedStyles = clonedDoc.querySelectorAll('style');
+        clonedStyles.forEach((styleEl) => {
+          if (styleEl.textContent && styleEl.textContent.includes('oklch')) {
+            styleEl.textContent = replaceOklchInCSS(styleEl.textContent);
+          }
+        });
+
+        const elements = clonedDoc.getElementsByTagName('*');
+        for (let idx = 0; idx < elements.length; idx++) {
+          const el = elements[idx];
+          if (el instanceof HTMLElement) {
+            const st = el.getAttribute('style');
+            if (st && st.includes('oklch')) {
+              el.setAttribute('style', replaceOklchInCSS(st));
+            }
+          }
+        }
+      }
+    });
+
+    element.style.cssText = originalStyle;
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    
+    // Switch extension to jpg
+    const cleanFilename = filename.toLowerCase().endsWith('.pdf') 
+      ? filename.substring(0, filename.length - 4) + '.jpg'
+      : filename.toLowerCase().endsWith('.jpg') ? filename : filename + '.jpg';
+
+    const a = document.createElement('a');
+    a.href = imgData;
+    a.download = cleanFilename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+    }, 150);
+
+  } catch (error: any) {
+    console.error('Lỗi khi xuất JPG:', error);
+    alert(`Không thể tự động xuất JPG do rào cản trình duyệt: ${error.message || error}`);
+  } finally {
+    // 3. Restore all modified stylesheets and disable status
+    for (const backup of backups) {
+      if ('originalText' in backup && backup.originalText !== undefined) {
+        backup.el.textContent = backup.originalText;
+      }
+      if (backup.tempStyle) {
+        if (backup.tempStyle.parentNode) {
+          backup.tempStyle.parentNode.removeChild(backup.tempStyle);
+        }
+        if (backup.el instanceof HTMLLinkElement) {
+          backup.el.disabled = false;
+        }
+      }
+    }
+    document.body.style.cursor = originalCursor;
+  }
 }
 
 /**
