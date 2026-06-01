@@ -11,6 +11,7 @@ import {
   CreditCard,
   CircleDollarSign,
   Megaphone,
+  Newspaper,
   History,
   Settings,
   Menu,
@@ -114,7 +115,7 @@ export default function App() {
   
   // Active Sidebar Tab Tracker
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'students' | 'tuition' | 'announcements' | 'config' | 'bank_transfers'
+    'dashboard' | 'students' | 'tuition' | 'news' | 'announcements' | 'config' | 'bank_transfers'
   >('dashboard');
 
   // Accounts list state with Local Storage persistence
@@ -184,6 +185,10 @@ export default function App() {
   const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
+
+  // Database connectivity health states
+  const [dbHealth, setDbHealth] = useState<'checking' | 'connected' | 'error' | 'noconfig'>('checking');
+  const [dbErrorMsg, setDbErrorMsg] = useState<string>('');
 
   // CRUD & Search Helper states
   const [searchClass, setSearchClass] = useState('');
@@ -341,10 +346,64 @@ export default function App() {
     localStorage.setItem(key, JSON.stringify(data));
   };
 
+  // Perform background connection verify test with the configured Google Apps Script Web App Google DB link
+  useEffect(() => {
+    if (!config.googleScriptsUrl) {
+      setDbHealth('noconfig');
+      return;
+    }
+
+    let isMounted = true;
+    setDbHealth('checking');
+
+    const checkGoogleDb = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout trigger
+
+        const resp = await fetch(`${config.googleScriptsUrl}?action=fetch`, {
+          method: 'GET',
+          redirect: 'follow',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) {
+          throw new Error(`Phản hồi mạng lỗi HTTP ${resp.status}`);
+        }
+
+        const resData = await resp.json();
+        if (resData.status === 'success') {
+          if (isMounted) {
+            setDbHealth('connected');
+            setDbErrorMsg('');
+          }
+        } else {
+          throw new Error(resData.message || 'Script báo lỗi phản hồi');
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setDbHealth('error');
+          setDbErrorMsg(err.message || 'Không thể kết nối hoặc thiết lập phân quyền "Anyone" chưa đúng.');
+        }
+      }
+    };
+
+    checkGoogleDb();
+
+    // Recheck again after 5 minutes to ensure connection is steady
+    const intervalId = setInterval(checkGoogleDb, 300000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [config.googleScriptsUrl]);
+
   // Redirect protection for unauthorized or non-admin users
   useEffect(() => {
     if (!isLoggedIn) {
-      if (activeTab !== 'dashboard' && activeTab !== 'announcements') {
+      if (activeTab !== 'dashboard' && activeTab !== 'news') {
         setActiveTab('dashboard');
       }
     } else {
@@ -1045,7 +1104,10 @@ export default function App() {
               { id: 'tuition', label: 'Quản Lý Học Phí', icon: CreditCard },
               { id: 'students', label: 'DS Võ Sinh', icon: Users }
             ] : []),
-            { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone },
+            { id: 'news', label: 'Tin Tức - Bài Viết', icon: Newspaper },
+            ...(isLoggedIn ? [
+              { id: 'announcements', label: 'Bản Tin Nội Bộ', icon: Megaphone }
+            ] : []),
             ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
               { id: 'bank_transfers', label: 'Chuyển Khoản', icon: Landmark },
               { id: 'config', label: 'Cấu Hình', icon: Settings }
@@ -1135,6 +1197,40 @@ export default function App() {
 
           {/* Quick Active user selection & Signout indicator */}
           <div className="flex items-center gap-3.5 self-end sm:self-auto select-none no-print">
+            {/* Live Database Connectivity indicator badge */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-100/60 bg-white text-emerald-950 text-[10px] font-semibold shadow-3xs cursor-pointer select-none" title="Trạng thái kết nối Google Sheets" onClick={() => setActiveTab('config')}>
+              {dbHealth === 'checking' && (
+                <>
+                  <span className="flex h-1.5 w-1.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                  </span>
+                  <span className="text-gray-500 font-medium">Đang kiểm tra DB...</span>
+                </>
+              )}
+              {dbHealth === 'connected' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                  <span className="text-emerald-800">Google Sheets: Đã kết nối</span>
+                </>
+              )}
+              {dbHealth === 'error' && (
+                <>
+                  <span className="flex h-1.5 w-1.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-600"></span>
+                  </span>
+                  <span className="text-rose-700">Google Sheets: Lỗi kết nối</span>
+                </>
+              )}
+              {dbHealth === 'noconfig' && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400"></span>
+                  <span className="text-gray-500 font-medium font-mono text-[9px]">Chưa cấu hình Google DB</span>
+                </>
+              )}
+            </div>
+
             {isLoggedIn ? (
               <div className="flex items-center gap-3">
                 {/* User credentials fast indicator switcher */}
@@ -1209,7 +1305,40 @@ export default function App() {
         </header>
 
         {/* ----------------- CORE VIEWS MAIN SPACE ----------------- */}
-        <section className="flex-1 p-5 md:p-6 select-none bg-emerald-50/10">
+        <section className="flex-1 p-5 md:p-6 select-none bg-emerald-50/10 animate-fade-in">
+          
+          {/* Dynamic Google Database Error notification banner */}
+          {dbHealth === 'error' && (
+            <div className="mb-5 p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in no-print">
+              <div className="flex items-start gap-3">
+                <span className="p-2 rounded-lg bg-rose-100 text-rose-700 shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-xs tracking-tight uppercase text-rose-950">
+                    LỖI KẾT NỐI DATABASE GOOGLE SHEETS
+                  </h4>
+                  <p className="text-[11px] text-rose-700/90 leading-relaxed font-semibold mt-0.5">
+                    Không thể kết nối hoặc tải cơ sở dữ liệu từ ứng dụng Google Apps Script Web App của bạn. Chi tiết: <span className="underline">{dbErrorMsg}</span>. 
+                    Mọi dữ liệu hoặc thay đổi sẽ tạm thời lưu trữ ngoại tuyến bằng Bộ nhớ dự phòng trên Trình duyệt (Offline Cache).
+                  </p>
+                </div>
+              </div>
+              {isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      setActiveTab('config');
+                    }}
+                    className="bg-[#be123c] hover:bg-[#9f1239] text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm cursor-pointer select-none transition-all"
+                  >
+                    Cấu hình kết nối
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -1223,18 +1352,20 @@ export default function App() {
               {/* ==============================================================
                   MODULE 2: ANALYTICAL DASHBOARD OVERVIEW (Simplified)
                   ============================================================== */}
-              {activeTab === 'dashboard' && (
-                <div className="space-y-6">
-                  {/* Title and Top Description */}
-                  <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
-                    <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
-                    <p className="text-xs text-emerald-800/80 mt-1">
-                      Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
-                    </p>
-                  </div>
+              {activeTab === 'dashboard' && (() => {
+                const isAdminOrSuperAdmin = isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN');
+                return (
+                  <div className="space-y-6">
+                    {/* Title and Top Description */}
+                    <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
+                      <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
+                      <p className="text-xs text-emerald-800/80 mt-1">
+                        Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
+                      </p>
+                    </div>
 
-                  {/* Top Simple Counters Grid */}
-                  <div className={`grid grid-cols-2 gap-2.5 ${isLoggedIn ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
+                    {/* Top Simple Counters Grid */}
+                    <div className={`grid grid-cols-2 gap-2.5 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-3'}`}>
                     {/* Stat Active Students */}
                     <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
                       <div>
@@ -1247,7 +1378,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {isLoggedIn ? (
+                    {isAdminOrSuperAdmin ? (
                       <>
                         {/* Stat Total Collected in CURRENT month */}
                         <div className="bg-white rounded-lg border border-gray-100 p-2.5 sm:p-3 shadow-3xs flex items-center justify-between gap-2.5">
@@ -1304,7 +1435,13 @@ export default function App() {
                         <div>
                           <p className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-widest font-sans">🔒 BÁO CÁO TÀI CHÍNH BẢO MẬT</p>
                           <h3 className="text-sm font-extrabold text-emerald-950 mt-1">Doanh Thu & Công Nợ</h3>
-                          <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">Vui lòng đăng nhập hệ thống ở góc trên bên phải để mở khóa báo cáo chi tiết.</p>
+                          <p className="text-[11px] text-emerald-800/80 font-medium mt-0.5">
+                            {isLoggedIn ? (
+                              "Yêu cầu quyền Quản trị viên (ADMIN) hoặc Ban Giám Sát (SUPER_ADMIN) để mở khóa báo cáo tài chính."
+                            ) : (
+                              "Vui lòng đăng nhập hệ thống ở góc trên bên phải bằng tài khoản Quản trị viên để mở khóa báo cáo."
+                            )}
+                          </p>
                         </div>
                         <div className="h-10 w-10 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center shrink-0">
                           <Lock className="h-4.5 w-4.5" />
@@ -1314,7 +1451,7 @@ export default function App() {
                   </div>
 
                   {/* Multi-month Advanced Tuition Status Matrix Block */}
-                  {isLoggedIn ? (
+                  {isAdminOrSuperAdmin ? (
                     <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-2xs space-y-4 font-sans">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-gray-100 pb-4">
                         <div className="space-y-0.5">
@@ -1640,19 +1777,29 @@ export default function App() {
                       <div className="mx-auto w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-100">
                         <LockKeyhole className="h-7 w-7 text-emerald-650 animate-pulse" />
                       </div>
-                      <h3 className="text-emerald-950 font-extrabold text-sm uppercase tracking-wider">YÊU CẦU ĐĂNG NHẬP HỆ THỐNG</h3>
+                      <h3 className="text-emerald-950 font-extrabold text-sm uppercase tracking-wider">
+                        {isLoggedIn ? "THIẾU QUYỀN TRUY CẬP BÁO CÁO" : "YÊU CẦU ĐĂNG NHẬP HỆ THỐNG"}
+                      </h3>
                       <p className="text-xs text-emerald-800/80 leading-relaxed">
-                        Bạn chưa đăng nhập hoặc phiên đã hết hạn. Vui lòng điền thông tin tài khoản và mật khẩu ở bảng góc trên bên phải để mở khóa ma trận báo cáo học phí và chức năng quản lý.
+                        {isLoggedIn ? (
+                          "Tính năng và ma trận phân tích báo cáo học phí chi tiết này chỉ dành riêng cho Ban Giám Sát (SUPER_ADMIN) và Quản Trị Viên (ADMIN). Tài khoản nhân viên của bạn hiện không có đủ thẩm quyền truy cập."
+                        ) : (
+                          "Bạn chưa đăng nhập hoặc phiên đã hết hạn. Vui lòng điền thông tin tài khoản và mật khẩu ở bảng góc trên bên phải để mở khóa ma trận báo cáo học phí và chức năng quản lý."
+                        )}
                       </p>
-                      <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100/50 max-w-sm mx-auto text-left">
-                        <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-emerald-800 block mb-1">💡 Thông tin tài khoản Demo:</span>
-                        <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">staff</span> (Mật khẩu: staff)</code>
-                        <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">admin</span> (Mật khẩu: admin)</code>
-                      </div>
+                      
+                      {!isLoggedIn && (
+                        <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100/50 max-w-sm mx-auto text-left">
+                          <span className="text-[9.5px] font-extrabold uppercase tracking-widest text-emerald-800 block mb-1">💡 Thông tin tài khoản Demo:</span>
+                          <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">staff</span> (Mật khẩu: staff)</code>
+                          <code className="text-[10.5px] font-mono text-emerald-900 block font-bold">Tài khoản: <span className="underline">admin</span> (Mật khẩu: admin)</code>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
 
               {/* ==============================================================
@@ -2305,6 +2452,21 @@ export default function App() {
               )}
 
               {/* ==============================================================
+                  NEWS-ARTICLES MODULE
+                  ============================================================== */}
+              {activeTab === 'news' && (
+                <AnnouncementSection
+                  announcements={announcements}
+                  userRole={currentUser.role}
+                  currentUserName={currentUser.fullName}
+                  onAddAnnouncement={handleAddNewAnnouncement}
+                  onUpdateAnnouncement={handleUpdateAnnouncement}
+                  onDeleteAnnouncement={handleDeleteAnnouncement}
+                  forceType="news"
+                />
+              )}
+
+              {/* ==============================================================
                   MODULE 7: ANNOUNCEMENTS OUTLINE BOARD
                   ============================================================== */}
               {activeTab === 'announcements' && (
@@ -2315,6 +2477,7 @@ export default function App() {
                   onAddAnnouncement={handleAddNewAnnouncement}
                   onUpdateAnnouncement={handleUpdateAnnouncement}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
+                  forceType="internal"
                 />
               )}
 

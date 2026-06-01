@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Pin, Trash2, Megaphone, Edit3, Plus, Calendar, PinOff, CheckCircle, ShieldAlert, X } from 'lucide-react';
+import { Pin, Trash2, Megaphone, Edit3, Plus, Calendar, PinOff, CheckCircle, ShieldAlert, X, Newspaper } from 'lucide-react';
 import { Announcement, UserRole } from '../types';
 import { motion } from 'motion/react';
 
@@ -15,6 +15,7 @@ interface AnnouncementSectionProps {
   onAddAnnouncement: (announcement: Omit<Announcement, 'announcementId' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateAnnouncement: (annId: string, updated: Partial<Announcement>) => void;
   onDeleteAnnouncement: (annId: string) => void;
+  forceType?: 'internal' | 'news';
 }
 
 export default function AnnouncementSection({
@@ -23,20 +24,37 @@ export default function AnnouncementSection({
   currentUserName,
   onAddAnnouncement,
   onUpdateAnnouncement,
-  onDeleteAnnouncement
+  onDeleteAnnouncement,
+  forceType
 }: AnnouncementSectionProps) {
+  const [activeSubTab, setActiveSubTab] = useState<'internal' | 'news'>(forceType || 'internal');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isPinned, setIsPinned] = useState(false);
+  const [type, setType] = useState<'internal' | 'news'>(forceType || 'internal');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  // Sychronize activeSubTab with forceType if it changes
+  React.useEffect(() => {
+    if (forceType) {
+      setActiveSubTab(forceType);
+      setType(forceType);
+    }
+  }, [forceType]);
+
   const canWrite = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'STAFF';
 
+  // Filter announcements by activeSubTab (missing type defaults to 'internal')
+  const filteredAnnouncements = announcements.filter((ann) => {
+    const annType = ann.type || 'internal';
+    return annType === activeSubTab;
+  });
+
   // Sort: pinned first, then by date desc
-  const sortedAnnouncements = [...announcements].sort((a, b) => {
+  const sortedAnnouncements = [...filteredAnnouncements].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -44,13 +62,14 @@ export default function AnnouncementSection({
 
   const handleOpenCreateForm = () => {
     if (!canWrite) {
-      setError('Tài khoản của bạn không có đủ thẩm quyền viết thông báo mới!');
+      setError(`Tài khoản của bạn không có đủ thẩm quyền viết ${activeSubTab === 'news' ? 'bài viết' : 'thông báo'} mới!`);
       return;
     }
     setEditingId(null);
     setTitle('');
     setContent('');
     setIsPinned(false);
+    setType(activeSubTab);
     setIsFormOpen(true);
   };
 
@@ -60,6 +79,7 @@ export default function AnnouncementSection({
     setTitle(ann.title);
     setContent(ann.content);
     setIsPinned(ann.pinned);
+    setType(ann.type || 'internal');
     setIsFormOpen(true);
   };
 
@@ -78,17 +98,19 @@ export default function AnnouncementSection({
         title,
         content,
         pinned: isPinned,
+        type,
         updatedAt: new Date().toISOString()
       });
-      setSuccess('Đã cập nhật thông báo thành công!');
+      setSuccess(type === 'news' ? 'Đã cập nhật bài viết thành công!' : 'Đã cập nhật thông báo thành công!');
     } else {
       onAddAnnouncement({
         title,
         content,
         createdBy: currentUserName,
-        pinned: isPinned
+        pinned: isPinned,
+        type
       });
-      setSuccess('Đã đăng tải thông báo mới lên hệ thống!');
+      setSuccess(type === 'news' ? 'Đã đăng tải bài viết mới lên hệ thống!' : 'Đã đăng tải thông báo mới lên hệ thống!');
     }
 
     setIsFormOpen(false);
@@ -102,9 +124,9 @@ export default function AnnouncementSection({
 
   const handleDelete = (annId: string) => {
     if (!canWrite) return;
-    if (confirm('Bạn có chắc chắn muốn xóa vĩnh viễn thông báo này không?')) {
+    if (confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${activeSubTab === 'news' ? 'bài viết' : 'thông báo'} này không?`)) {
       onDeleteAnnouncement(annId);
-      setSuccess('Đã gỡ bỏ bản tin thông báo tải xuống!');
+      setSuccess(`Đã gỡ bỏ ${activeSubTab === 'news' ? 'bài viết' : 'bản tin thông báo'} thành công!`);
       setTimeout(() => setSuccess(''), 4000);
     }
   };
@@ -112,44 +134,99 @@ export default function AnnouncementSection({
   const handleTogglePin = (ann: Announcement) => {
     if (!canWrite) return;
     onUpdateAnnouncement(ann.announcementId, { pinned: !ann.pinned });
-    setSuccess(`Đã ${!ann.pinned ? 'Ghim' : 'Bỏ Ghim'} thông báo thành công!`);
+    setSuccess(`Đã ${!ann.pinned ? 'Ghim' : 'Bỏ Ghim'} thành công!`);
     setTimeout(() => setSuccess(''), 3000);
   };
 
+  const internalCount = announcements.filter(a => !a.type || a.type === 'internal').length;
+  const newsCount = announcements.filter(a => a.type === 'news').length;
+
   return (
     <div className="space-y-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
+      {/* Dynamic Navigation Subtabs */}
+      {!forceType && (
+        <div className="flex border-b border-gray-100 bg-white p-1 rounded-xl shadow-2xs gap-2">
+          <button
+            onClick={() => setActiveSubTab('internal')}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeSubTab === 'internal'
+                ? 'bg-emerald-50 text-emerald-800 border-b-2 border-emerald-600 shadow-3xs'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <Megaphone className="h-4 w-4 text-emerald-600" />
+            Bảng Tin Nội Bộ
+            <span className="text-[10px] bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded-full ml-1 font-extrabold">
+              {internalCount}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveSubTab('news')}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeSubTab === 'news'
+                ? 'bg-emerald-50 text-emerald-800 border-b-2 border-emerald-600 shadow-3xs'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <Newspaper className="h-4 w-4 text-emerald-600" />
+            Tin Tức - Bài Viết
+            <span className="text-[10px] bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded-full ml-1 font-extrabold">
+              {newsCount}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Page Header with details */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-3xs">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Bảng Tin & Thông Báo Nội Bộ</h1>
-          <p className="text-xs text-gray-500 mt-1">Truyền đạt lịch nghỉ lễ, kế hoạch đóng học phí, lịch bổ trợ và quy chế thi cử.</p>
+          <h1 className="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+            {activeSubTab === 'internal' ? (
+              <>
+                <Megaphone className="h-5 w-5 text-emerald-600 shrink-0 select-none" />
+                Bảng Tin & Thông Báo Nội Bộ
+              </>
+            ) : (
+              <>
+                <Newspaper className="h-5 w-5 text-emerald-600 shrink-0 select-none" />
+                Tin Tức - Bài Viết Linh Hoạt
+              </>
+            )}
+          </h1>
+          <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+            {activeSubTab === 'internal' 
+              ? 'Truyền đạt lịch nghỉ lễ, kế hoạch đóng học phí, lịch bổ trợ và quy chế thi cử đến toàn thể học viên.'
+              : 'Chia sẻ võ đạo tinh hoa, kỹ thuật Vịnh Xuân Quyền, tin tức hội thảo, sự kiện võ thuật nổi bật.'
+            }
+          </p>
         </div>
 
         {canWrite && (
           <button
             onClick={handleOpenCreateForm}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 font-bold text-white text-xs px-3.5 py-2 rounded-lg transition-all shadow-xs cursor-pointer"
+            className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 font-bold text-white text-xs px-4 py-2.5 rounded-lg transition-all shadow-xs cursor-pointer select-none self-start sm:self-auto"
           >
-            <Plus className="h-4 w-4" /> Viết Bản Tin
+            <Plus className="h-4 w-4" /> 
+            {activeSubTab === 'internal' ? 'Viết Bản Tin' : 'Viết Bài Viết'}
           </button>
         )}
       </div>
 
       {success && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 flex items-center gap-2 pulse-active">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 flex items-center gap-2 pulse-active shadow-3xs animate-fade-in">
           <CheckCircle className="h-4 w-4 shrink-0" />
           {success}
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800 flex items-center gap-2">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800 flex items-center gap-2 shadow-3xs">
           <ShieldAlert className="h-4 w-4 shrink-0" />
           {error}
         </div>
       )}
 
-      {/* Write/Edit Announcement Drawer or Modal Form */}
+      {/* Write/Edit Announcement Form. Type can be changed dynamically */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
           <motion.div 
@@ -157,50 +234,87 @@ export default function AnnouncementSection({
             animate={{ opacity: 1, scale: 1 }}
             className="w-full max-w-lg rounded-xl flex flex-col bg-white border border-emerald-100 shadow-xl overflow-hidden"
           >
-            <div className="flex items-center justify-between bg-emerald-50 px-5 py-3 border-b border-emerald-100/50">
-              <span className="font-bold text-xs text-emerald-950 uppercase tracking-wider">
-                {editingId ? 'Chỉnh sửa bản tin thông báo' : 'Tạo mới thông báo nội bộ'}
+            <div className="flex items-center justify-between bg-emerald-50 px-5 py-3.5 border-b border-emerald-100/50">
+              <span className="font-bold text-xs text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                {type === 'news' ? <Newspaper className="h-4 w-4 text-emerald-800" /> : <Megaphone className="h-4 w-4 text-emerald-800" />}
+                {editingId 
+                  ? (type === 'news' ? 'Chỉnh sửa bài viết tin tức' : 'Chỉnh sửa bản tin thông báo') 
+                  : (type === 'news' ? 'Tạo bài viết tin tức mới' : 'Tạo thông báo nội bộ mới')
+                }
               </span>
-              <button onClick={() => setIsFormOpen(false)} className="rounded-full p-1 text-emerald-700 hover:bg-emerald-100">
+              <button onClick={() => setIsFormOpen(false)} className="rounded-full p-1 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleSave} className="p-5 space-y-4">
+              {/* Type Category selection */}
+              {!forceType && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Mục đích phát hành</label>
+                  <div className="flex gap-6 pt-1">
+                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="announcement-type"
+                        checked={type === 'internal'}
+                        onChange={() => setType('internal')}
+                        className="h-4 w-4 accent-emerald-600 cursor-pointer"
+                      />
+                      📢 Thông báo nội bộ
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="announcement-type"
+                        checked={type === 'news'}
+                        onChange={() => setType('news')}
+                        className="h-4 w-4 accent-emerald-600 cursor-pointer"
+                      />
+                      📰 Tin tức - Bài viết
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Tiêu đề bản tin</label>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Tiêu đề bài đăng</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Lịch bồi dưỡng IELTS Reading thứ 7 tuần này"
+                  placeholder={type === 'news' ? "Ví dụ: Lịch sử hình thành tấn pháp Vịnh Xuân dòng Nam Anh" : "Ví dụ: Thông báo nghỉ lễ Quốc Khánh mùng 2 tháng 9"}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2.5 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none focus:bg-white transition"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase">Nội dung chi tiết</label>
+                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Nội dung chi tiết</label>
                 <textarea
                   required
-                  rows={4}
-                  placeholder="Nhập nội dung thông báo đầy đủ gửi tặng phụ huynh và học sinh..."
+                  rows={6}
+                  placeholder={
+                    type === 'news' 
+                    ? "Nhập nội dung bài luận truyền bá võ thuật, kỹ năng chiến đấu, rèn luyện tấn pháp..."
+                    : "Nhập chi tiết nội dung thông báo, thời gian, quy chuẩn áp dụng..."
+                  }
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 p-3 text-xs focus:border-emerald-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50/50 p-3 text-xs focus:border-emerald-500 focus:outline-none focus:bg-white transition"
                 ></textarea>
               </div>
 
-              <div className="flex items-center gap-2 pt-1.5 focus:outline-none">
+              <div className="flex items-center gap-2 pt-1.5">
                 <input
                   type="checkbox"
                   id="pin-check"
                   checked={isPinned}
                   onChange={(e) => setIsPinned(e.target.checked)}
-                  className="h-4 w-4 accent-emerald-600 rounded"
+                  className="h-4 w-4 accent-emerald-600 rounded cursor-pointer"
                 />
-                <label htmlFor="pin-check" className="text-xs font-semibold text-gray-600 select-none cursor-pointer flex items-center gap-1">
-                  <Pin className="h-3 w-3 text-emerald-600" /> Ghim lên đầu tin tức (Pinned announcement)
+                <label htmlFor="pin-check" className="text-xs font-bold text-gray-600 select-none cursor-pointer flex items-center gap-1.5">
+                  <Pin className="h-3.5 w-3.5 text-emerald-600" /> Ghim bài đăng lên đầu bảng mục này
                 </label>
               </div>
 
@@ -208,13 +322,13 @@ export default function AnnouncementSection({
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer select-none"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-sm shadow-emerald-200"
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-sm shadow-emerald-200 select-none"
                 >
                   Lưu & Phát hành
                 </button>
@@ -224,29 +338,33 @@ export default function AnnouncementSection({
         </div>
       )}
 
-      {/* Announcements Stream List */}
+      {/* Stream list container */}
       <div className="space-y-3.5">
         {sortedAnnouncements.length === 0 ? (
-          <div className="rounded-xl border border-gray-100 bg-white p-12 text-center">
-            <Megaphone className="h-8 w-8 text-emerald-400 mx-auto opacity-70" />
-            <p className="text-sm text-gray-500 mt-3 font-medium">Bảng tin hệ thống trống rỗng.</p>
-            <p className="text-xs text-gray-400">Hãy thêm thông báo đầu tiên để ban truyền thông võ quán hoạt động.</p>
+          <div className="rounded-xl border border-gray-100 bg-white p-12 text-center shadow-3xs">
+            {activeSubTab === 'news' ? (
+              <Newspaper className="h-8 w-8 text-emerald-400 mx-auto opacity-70 animate-pulse" />
+            ) : (
+              <Megaphone className="h-8 w-8 text-emerald-400 mx-auto opacity-70 animate-pulse" />
+            )}
+            <p className="text-sm font-bold text-gray-700 mt-3">Mục {activeSubTab === 'news' ? 'Tin tức - Bài viết' : 'Thông báo nội bộ'} trống rỗng.</p>
+            <p className="text-xs text-gray-400 mt-1">Hãy đăng bài đăng đầu tiên để ban truyền bá võ học võ quán hoạt động.</p>
           </div>
         ) : (
           sortedAnnouncements.map((ann) => (
             <div
               key={ann.announcementId}
-              className={`rounded-xl border border-gray-100 bg-white p-5 shadow-xs relative overflow-hidden transition-all hover:border-emerald-200 hover:shadow-sm ${ann.pinned ? 'border-l-4 border-l-emerald-500 bg-emerald-50/10' : ''}`}
+              className={`rounded-xl border border-gray-100 bg-white p-5 shadow-3xs relative overflow-hidden transition-all hover:border-emerald-200 hover:shadow-xs ${ann.pinned ? 'border-l-4 border-l-emerald-500 bg-emerald-50/5' : ''}`}
             >
               {ann.pinned && (
-                <div className="absolute top-4 right-4 flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                <div className="absolute top-4 right-4 flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-wide">
                   <Pin className="h-3 w-3 shrink-0" />
-                  Ghim đầu bảng
+                  Ghim Tin Đầu
                 </div>
               )}
 
               <div className="flex flex-col gap-1.5 pr-20 md:pr-24">
-                <h3 className="text-sm font-bold text-gray-900 leading-snug">{ann.title}</h3>
+                <h3 className="text-sm font-extrabold text-gray-900 leading-snug">{ann.title}</h3>
                 
                 {/* Meta details row */}
                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 font-medium">
@@ -259,17 +377,17 @@ export default function AnnouncementSection({
                 </div>
               </div>
 
-              {/* Body Text */}
+              {/* Body Content */}
               <div className="mt-3.5 text-xs text-gray-600 leading-relaxed whitespace-pre-line">
                 {ann.content}
               </div>
 
               {/* Action permissions controls */}
               {canWrite && (
-                <div className="flex items-center justify-end gap-2 border-t border-gray-50/50 pt-3 mt-4 text-[11px]">
+                <div className="flex items-center justify-end gap-2 border-t border-gray-50/50 pt-3 mt-4 text-[11px] select-none">
                   <button
                     onClick={() => handleTogglePin(ann)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-emerald-700 font-semibold cursor-pointer"
+                    className="flex items-center gap-1 text-gray-400 hover:text-emerald-700 font-bold cursor-pointer"
                   >
                     {ann.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
                     {ann.pinned ? 'Bỏ ghim' : 'Ghim'}
@@ -277,7 +395,7 @@ export default function AnnouncementSection({
                   <span className="text-gray-200">|</span>
                   <button
                     onClick={() => handleEditClick(ann)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-amber-700 font-semibold cursor-pointer"
+                    className="flex items-center gap-1 text-gray-400 hover:text-amber-700 font-bold cursor-pointer"
                   >
                     <Edit3 className="h-3 w-3" />
                     Sửa
@@ -285,7 +403,7 @@ export default function AnnouncementSection({
                   <span className="text-gray-200">|</span>
                   <button
                     onClick={() => handleDelete(ann.announcementId)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-rose-700 font-semibold cursor-pointer"
+                    className="flex items-center gap-1 text-gray-400 hover:text-rose-700 font-bold cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />
                     Xóa

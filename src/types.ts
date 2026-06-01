@@ -96,6 +96,7 @@ export interface Announcement {
   createdAt: string;
   updatedAt: string;
   pinned: boolean;
+  type?: 'internal' | 'news';
 }
 
 export interface AuditLog {

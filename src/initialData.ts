@@ -269,7 +269,18 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
     createdBy: 'thuyethn',
     createdAt: '2026-05-27T08:00:00Z',
     updatedAt: '2026-05-27T08:00:00Z',
-    pinned: true
+    pinned: true,
+    type: 'internal'
+  },
+  {
+    announcementId: 'ANN-02',
+    title: 'Tinh Hoa Tinh Thần Võ Đạo Trong Hệ Phái Vịnh Xuân Quyền',
+    content: 'Tập luyện Vịnh Xuân Quyền không chỉ là rèn luyện những đường quyền dũng mãnh hay bộ pháp linh hoạt, mà cốt lõi cốt tủy là tu dưỡng tâm tính, rèn luyện sự tĩnh lặng trong tâm hồn. Sự hài hòa giữa nhu và cương, tính nhẫn nại và tinh thần khiêm nhường chính là đỉnh cao của võ đạo.',
+    createdBy: 'Võ Sư Ban Truyền Thông',
+    createdAt: '2026-05-30T10:00:00Z',
+    updatedAt: '2026-05-30T10:00:00Z',
+    pinned: false,
+    type: 'news'
   }
 ];
 
