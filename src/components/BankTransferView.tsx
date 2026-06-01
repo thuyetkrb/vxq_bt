@@ -242,7 +242,15 @@ export default function BankTransferView({
             <Download className="h-3.5 w-3.5 text-white/90" /> Xuất PDF
           </button>
           
-          {/* Ghi nhận phiếu chuyển khoản button removed */}
+          {!showAddForm && !editingTransfer && (
+            <button
+              type="button"
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-3xs cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" /> Thêm Giao Dịch
+            </button>
+          )}
         </div>
       </div>
 

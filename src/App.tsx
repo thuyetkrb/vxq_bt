@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   GraduationCap,
@@ -216,6 +216,27 @@ export default function App() {
   const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
+
+  // Sync locks and tracking lists for deleted items
+  const isSyncingRef = useRef<boolean>(false);
+  const lastActivePushRef = useRef<string>('');
+
+  const studentsStateRef = useRef<Student[]>([]);
+  studentsStateRef.current = students;
+  const paymentsStateRef = useRef<TuitionPayment[]>([]);
+  paymentsStateRef.current = payments;
+  const bankTransfersStateRef = useRef<BankTransfer[]>([]);
+  bankTransfersStateRef.current = bankTransfers;
+  const announcementsStateRef = useRef<Announcement[]>([]);
+  announcementsStateRef.current = announcements;
+  const usersStateRef = useRef<User[]>([]);
+  usersStateRef.current = users;
+  const [deletedTransferIds, setDeletedTransferIds] = useState<string[]>(() => {
+    return JSON.parse(localStorage.getItem('mec_deleted_transfers') || '[]');
+  });
+  const [deletedAnnouncementIds, setDeletedAnnouncementIds] = useState<string[]>(() => {
+    return JSON.parse(localStorage.getItem('mec_deleted_announcements') || '[]');
+  });
 
   // Database connectivity health states
   const [dbHealth, setDbHealth] = useState<'checking' | 'connected' | 'error' | 'noconfig'>('checking');
@@ -446,6 +467,245 @@ export default function App() {
     localStorage.setItem(key, JSON.stringify(data));
   };
 
+  // Bidirectional smart merge function that compares remote and local states by timestamp / IDs,
+  // preventing accidental database deletion, assigning safe IDs to bare rows, and syncs additions.
+  const mergeBidirectionalData = (
+    remoteData: any,
+    localStudents: Student[],
+    localPayments: TuitionPayment[],
+    localTransfers: BankTransfer[],
+    localAnnouncements: Announcement[],
+    localUsers: User[]
+  ) => {
+    const getTime = (isoStr: string | undefined) => {
+      if (!isoStr) return 0;
+      return new Date(isoStr).getTime();
+    };
+
+    // --- 1. MERGE STUDENTS ---
+    let parsedRemoteStudents: Student[] = [];
+    if (remoteData.students && Array.isArray(remoteData.students)) {
+      parsedRemoteStudents = remoteData.students.filter((s: any) => s && (s.fullName || s.studentId)).map((s: any, idx: number) => {
+        let id = String(s.studentId || '').trim();
+        if (!id) {
+          id = `VS-GHS-${idx + 1}-${String(s.fullName || '').toLowerCase().replace(/\s+/g, '') || Math.floor(1000 + Math.random() * 9000)}`;
+        } else if (!id.startsWith('VS-')) {
+          id = id.replace(/^STUD-/, 'VS-');
+        }
+        return {
+          studentId: id,
+          fullName: String(s.fullName || 'Võ sinh chưa đặt tên'),
+          nickname: s.nickname ? String(s.nickname) : undefined,
+          dateOfBirth: String(s.dateOfBirth || ''),
+          gender: s.gender === 'Female' || s.gender === 'Nữ' || s.gender === 'Nữ ' ? 'Female' : 'Male',
+          parentName: String(s.parentName || ''),
+          parentPhone: String(s.parentPhone || ''),
+          phone: s.phone ? String(s.phone) : undefined,
+          address: String(s.address || ''),
+          email: String(s.email || ''),
+          classId: s.classId ? String(s.classId) : undefined,
+          tuitionFee: parseFloat(s.tuitionFee) || 0,
+          discount: parseFloat(s.discount) || 0,
+          note: String(s.note || ''),
+          activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
+          enrollmentDate: String(s.enrollmentDate || ''),
+          createdAt: String(s.createdAt || new Date().toISOString()),
+          updatedAt: String(s.updatedAt || new Date().toISOString())
+        };
+      });
+    }
+
+    const mergedStudentsMap = new Map<string, Student>();
+    parsedRemoteStudents.forEach(s => mergedStudentsMap.set(s.studentId, s));
+    localStudents.forEach(s => {
+      const existing = mergedStudentsMap.get(s.studentId);
+      if (!existing) {
+        mergedStudentsMap.set(s.studentId, s);
+      } else {
+        const localTime = Math.max(getTime(s.updatedAt), getTime(s.createdAt));
+        const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
+        if (localTime > remoteTime) {
+          mergedStudentsMap.set(s.studentId, s);
+        }
+      }
+    });
+    const finalStudents = Array.from(mergedStudentsMap.values());
+
+    // --- 2. MERGE PAYMENTS ---
+    let parsedRemotePayments: TuitionPayment[] = [];
+    const rawPayments = remoteData.tuitionPayments || remoteData.payments;
+    if (rawPayments && Array.isArray(rawPayments)) {
+      parsedRemotePayments = rawPayments.filter((p: any) => p).map((p: any, idx: number) => {
+        let id = String(p.paymentId || '').trim();
+        if (!id) {
+          id = `PAY-GHS-${idx + 1}-${p.studentId || 'unknown'}-${p.month || 'M'}-${p.year || 'Y'}`;
+        }
+        return {
+          paymentId: id,
+          studentId: String(p.studentId || '').trim().replace(/^STUD-/, 'VS-'),
+          classId: p.classId ? String(p.classId) : undefined,
+          month: parseInt(p.month) || new Date().getMonth() + 1,
+          year: parseInt(p.year) || new Date().getFullYear(),
+          amount: parseFloat(p.amount) || 0,
+          paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
+          paidDate: p.paidDate ? String(p.paidDate) : undefined,
+          collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
+          receiptNo: String(p.receiptNo || ''),
+          note: String(p.note || ''),
+          createdAt: String(p.createdAt || new Date().toISOString()),
+          updatedAt: String(p.updatedAt || new Date().toISOString())
+        };
+      });
+    }
+
+    const mergedPaymentsMap = new Map<string, TuitionPayment>();
+    parsedRemotePayments.forEach(p => mergedPaymentsMap.set(p.paymentId, p));
+    localPayments.forEach(p => {
+      if (p.paymentId) {
+        const existing = mergedPaymentsMap.get(p.paymentId);
+        if (!existing) {
+          mergedPaymentsMap.set(p.paymentId, p);
+        } else {
+          const localTime = Math.max(getTime(p.updatedAt), getTime(p.createdAt));
+          const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
+          if (localTime > remoteTime) {
+            mergedPaymentsMap.set(p.paymentId, p);
+          }
+        }
+      }
+    });
+    const finalPayments = Array.from(mergedPaymentsMap.values());
+
+    // --- 3. MERGE BANK TRANSFERS ---
+    let parsedRemoteTransfers: BankTransfer[] = [];
+    if (remoteData.bankTransfers && Array.isArray(remoteData.bankTransfers)) {
+      parsedRemoteTransfers = remoteData.bankTransfers.filter((b: any) => b).map((b: any, idx: number) => {
+        let id = String(b.transferId || '').trim();
+        if (!id) {
+          id = `TFR-GHS-${idx + 1}-${b.studentId || 'unknown'}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+        return {
+          transferId: id,
+          studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
+          month: parseInt(b.month) || new Date().getMonth() + 1,
+          year: parseInt(b.year) || new Date().getFullYear(),
+          transferDate: String(b.transferDate || ''),
+          amount: parseFloat(b.amount) || 0,
+          note: String(b.note || ''),
+          createdBy: String(b.createdBy || ''),
+          createdAt: String(b.createdAt || new Date().toISOString())
+        };
+      });
+    }
+
+    const mergedTransfersMap = new Map<string, BankTransfer>();
+    const filterDeletedTransfers = localTransfers.length > 0;
+    parsedRemoteTransfers.forEach(b => {
+      if (!filterDeletedTransfers || !deletedTransferIds.includes(b.transferId)) {
+        mergedTransfersMap.set(b.transferId, b);
+      }
+    });
+
+    localTransfers.forEach(b => {
+      if (!deletedTransferIds.includes(b.transferId)) {
+        const existing = mergedTransfersMap.get(b.transferId);
+        if (!existing) {
+          mergedTransfersMap.set(b.transferId, b);
+        } else {
+          const localTime = getTime(b.createdAt);
+          const remoteTime = getTime(existing.createdAt);
+          if (localTime > remoteTime) {
+            mergedTransfersMap.set(b.transferId, b);
+          }
+        }
+      }
+    });
+    const finalTransfers = Array.from(mergedTransfersMap.values());
+
+    // --- 4. MERGE ANNOUNCEMENTS ---
+    let parsedRemoteAnnouncements: Announcement[] = [];
+    if (remoteData.announcements && Array.isArray(remoteData.announcements)) {
+      parsedRemoteAnnouncements = remoteData.announcements.filter((a: any) => a).map((a: any, idx: number) => {
+        let id = String(a.announcementId || '').trim();
+        if (!id) {
+          id = `ANN-GHS-${idx + 1}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+        return {
+          announcementId: id,
+          type: (a.type === 'news' || a.type === 'internal') ? a.type : 'internal',
+          title: String(a.title || 'Thông báo'),
+          content: String(a.content || ''),
+          createdBy: String(a.createdBy || ''),
+          createdAt: String(a.createdAt || new Date().toISOString()),
+          updatedAt: String(a.updatedAt || new Date().toISOString()),
+          pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
+        };
+      });
+    }
+
+    const mergedAnnouncementsMap = new Map<string, Announcement>();
+    const filterDeletedAnnouncements = localAnnouncements.length > 0;
+    parsedRemoteAnnouncements.forEach(a => {
+      if (!filterDeletedAnnouncements || !deletedAnnouncementIds.includes(a.announcementId)) {
+        mergedAnnouncementsMap.set(a.announcementId, a);
+      }
+    });
+
+    localAnnouncements.forEach(a => {
+      if (!deletedAnnouncementIds.includes(a.announcementId)) {
+        const existing = mergedAnnouncementsMap.get(a.announcementId);
+        if (!existing) {
+          mergedAnnouncementsMap.set(a.announcementId, a);
+        } else {
+          const localTime = Math.max(getTime(a.updatedAt), getTime(a.createdAt));
+          const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
+          if (localTime > remoteTime) {
+            mergedAnnouncementsMap.set(a.announcementId, a);
+          }
+        }
+      }
+    });
+    const finalAnnouncements = Array.from(mergedAnnouncementsMap.values());
+
+    // --- 5. MERGE USERS ---
+    let parsedRemoteUsers: User[] = [];
+    if (remoteData.users && Array.isArray(remoteData.users)) {
+      parsedRemoteUsers = remoteData.users.filter((u: any) => u && u.username).map((u: any) => {
+        let role = u.role as UserRole;
+        if (role === 'SUPPER_ADMIN') {
+          role = 'SUPER_ADMIN';
+        }
+        return {
+          username: String(u.username || '').trim().toLowerCase(),
+          fullName: String(u.fullName || ''),
+          role: role,
+          isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
+          password: u.password ? String(u.password) : undefined
+        };
+      });
+    }
+
+    const mergedUsersMap = new Map<string, User>();
+    parsedRemoteUsers.forEach(u => mergedUsersMap.set(u.username, u));
+    localUsers.forEach(u => {
+      const existing = mergedUsersMap.get(u.username);
+      if (!existing) {
+        mergedUsersMap.set(u.username, u);
+      } else {
+        mergedUsersMap.set(u.username, { ...existing, ...u });
+      }
+    });
+    const finalUsers = Array.from(mergedUsersMap.values());
+
+    return {
+      students: finalStudents,
+      payments: finalPayments,
+      bankTransfers: finalTransfers,
+      announcements: finalAnnouncements,
+      users: finalUsers
+    };
+  };
+
   // Perform background connection verify test with the configured Google Apps Script Web App Google DB link
   useEffect(() => {
     if (!config.googleScriptsUrl) {
@@ -477,122 +737,47 @@ export default function App() {
         try {
           resData = await resp.json();
         } catch (jsonErr) {
-          throw new Error('Lỗi cú pháp phản hồi (JSON parse error). Script đang trả về trang HTML/văn bản thay vì dữ liệu JSON. Thường là do bạn chưa cấp quyền "Authorize Access" khi chạy thử Script hoặc chưa đồng ý phân quyền kết nối tài khoản Google Sheets của mình.');
+          throw new Error('Lỗi cú pháp phản hồi (JSON parse error). Script đang trả về trang HTML/văn bản thay vì dữ liệu JSON.');
         }
 
-        if (resData.status === 'success') {
+        if (resData.status === 'success' && resData.data) {
           if (isMounted) {
             setDbHealth('connected');
             setDbErrorMsg('');
 
-            // On initial app load, automatically pull and synchronize all spreadsheet tables
-            if (isInitialLoad && resData.data) {
-              const d = resData.data;
+            // Synchronize and merge both on initial load and periodically
+            const merged = mergeBidirectionalData(
+              resData.data,
+              studentsStateRef.current,
+              paymentsStateRef.current,
+              bankTransfersStateRef.current,
+              announcementsStateRef.current,
+              usersStateRef.current
+            );
 
-              // 1. Synchronize Students
-              if (d.students && Array.isArray(d.students)) {
-                const parsedStudents = d.students.map((s: any) => ({
-                  studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
-                  fullName: String(s.fullName || ''),
-                  nickname: s.nickname ? String(s.nickname) : undefined,
-                  dateOfBirth: String(s.dateOfBirth || ''),
-                  gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
-                  parentName: String(s.parentName || ''),
-                  parentPhone: String(s.parentPhone || ''),
-                  phone: s.phone ? String(s.phone) : undefined,
-                  address: String(s.address || ''),
-                  email: String(s.email || ''),
-                  classId: s.classId ? String(s.classId) : undefined,
-                  tuitionFee: parseFloat(s.tuitionFee) || 0,
-                  discount: parseFloat(s.discount) || 0,
-                  note: String(s.note || ''),
-                  activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
-                  enrollmentDate: String(s.enrollmentDate || ''),
-                  createdAt: String(s.createdAt || new Date().toISOString()),
-                  updatedAt: String(s.updatedAt || new Date().toISOString())
-                }));
-                setStudents(parsedStudents);
-                localStorage.setItem('mec_students', JSON.stringify(parsedStudents));
-              }
-
-              // 2. Synchronize Payments
-              const rawPayments = d.tuitionPayments || d.payments;
-              if (rawPayments && Array.isArray(rawPayments)) {
-                const parsedPayments = rawPayments.map((p: any) => ({
-                  paymentId: String(p.paymentId || ''),
-                  studentId: String(p.studentId || '').replace(/^STUD-/, 'VS-'),
-                  classId: p.classId ? String(p.classId) : undefined,
-                  month: parseInt(p.month) || new Date().getMonth() + 1,
-                  year: parseInt(p.year) || new Date().getFullYear(),
-                  amount: parseFloat(p.amount) || 0,
-                  paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
-                  paidDate: p.paidDate ? String(p.paidDate) : undefined,
-                  collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
-                  receiptNo: String(p.receiptNo || ''),
-                  note: String(p.note || ''),
-                  createdAt: String(p.createdAt || new Date().toISOString()),
-                  updatedAt: String(p.updatedAt || new Date().toISOString())
-                }));
-                setPayments(parsedPayments);
-                localStorage.setItem('mec_payments', JSON.stringify(parsedPayments));
-              }
-
-              // 3. Synchronize Bank Transfers
-              if (d.bankTransfers && Array.isArray(d.bankTransfers)) {
-                const parsedTransfers = d.bankTransfers.map((b: any) => ({
-                  transferId: String(b.transferId || ''),
-                  studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
-                  month: parseInt(b.month) || new Date().getMonth() + 1,
-                  year: parseInt(b.year) || new Date().getFullYear(),
-                  transferDate: String(b.transferDate || ''),
-                  amount: parseFloat(b.amount) || 0,
-                  note: String(b.note || ''),
-                  createdBy: String(b.createdBy || ''),
-                  createdAt: String(b.createdAt || new Date().toISOString())
-                }));
-                setBankTransfers(parsedTransfers);
-                localStorage.setItem('mec_bank_transfers', JSON.stringify(parsedTransfers));
-              }
-
-              // 4. Synchronize Users
-              if (d.users && Array.isArray(d.users)) {
-                const parsedUsers = d.users.map((u: any) => {
-                  let role = u.role as UserRole;
-                  if (role === 'SUPPER_ADMIN') {
-                    role = 'SUPER_ADMIN';
-                  }
-                  return {
-                    username: String(u.username || '').trim().toLowerCase(),
-                    fullName: String(u.fullName || ''),
-                    role: role,
-                    isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
-                    password: u.password ? String(u.password) : undefined
-                  };
-                });
-                
-                // If currentUser was default viewer, and we find a logged-in cookie or we have users, it helps update
-                setUsers(parsedUsers);
-                localStorage.setItem('vxq_users', JSON.stringify(parsedUsers));
-              }
-
-              // 5. Synchronize Announcements
-              if (d.announcements && Array.isArray(d.announcements)) {
-                const parsedAnnouncements = d.announcements.map((a: any) => ({
-                  announcementId: String(a.announcementId || ''),
-                  type: (a.type === 'news' || a.type === 'internal') ? a.type : 'internal',
-                  title: String(a.title || ''),
-                  content: String(a.content || ''),
-                  createdBy: String(a.createdBy || ''),
-                  createdAt: String(a.createdAt || new Date().toISOString()),
-                  updatedAt: String(a.updatedAt || new Date().toISOString()),
-                  pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
-                }));
-                setAnnouncements(parsedAnnouncements);
-                localStorage.setItem('mec_announcements', JSON.stringify(parsedAnnouncements));
-              }
+            // Compare and update states safely to avoid re-renders or feedback loops
+            if (JSON.stringify(merged.students) !== JSON.stringify(studentsStateRef.current)) {
+              setStudents(merged.students);
+              localStorage.setItem('mec_students', JSON.stringify(merged.students));
+            }
+            if (JSON.stringify(merged.payments) !== JSON.stringify(paymentsStateRef.current)) {
+              setPayments(merged.payments);
+              localStorage.setItem('mec_payments', JSON.stringify(merged.payments));
+            }
+            if (JSON.stringify(merged.bankTransfers) !== JSON.stringify(bankTransfersStateRef.current)) {
+              setBankTransfers(merged.bankTransfers);
+              localStorage.setItem('mec_bank_transfers', JSON.stringify(merged.bankTransfers));
+            }
+            if (JSON.stringify(merged.announcements) !== JSON.stringify(announcementsStateRef.current)) {
+              setAnnouncements(merged.announcements);
+              localStorage.setItem('mec_announcements', JSON.stringify(merged.announcements));
+            }
+            if (JSON.stringify(merged.users) !== JSON.stringify(usersStateRef.current)) {
+              setUsers(merged.users);
+              localStorage.setItem('vxq_users', JSON.stringify(merged.users));
             }
           }
-        } else {
+        } else if (resData.status !== 'success') {
           throw new Error(resData.message || 'Script báo lỗi phản hồi');
         }
       } catch (err: any) {
@@ -602,9 +787,9 @@ export default function App() {
           if (err.name === 'AbortError') {
             customMsg = 'Thời gian kết nối quá hạn (Hơn 8 giây). Script của bạn không phản hồi hoặc URL cấu hình bị sai.';
           } else if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
-            customMsg = 'Lỗi mạng hoặc chặn CORS. Hãy chắc chắn rằng bạn đã: 1) Chọn cấu hình quyền truy cập (Who has access) của Web App là "Anyone" (Bất kỳ ai), KHÔNG chọn "Only myself"; 2) ID/URL Web App triển khai chính xác dạng kết thúc bằng "/exec", không phải liên kết trang chỉnh sửa "/edit".';
+            customMsg = 'Lỗi mạng hoặc chặn CORS. Hãy chắc chắn rằng bạn đã đặt "Anyone" (Bất kỳ ai) và URL đúng định dạng "/exec".';
           }
-          setDbErrorMsg(customMsg || 'Không thể kết nối hoặc thiết lập phân quyền "Anyone" chưa đúng.');
+          setDbErrorMsg(customMsg || 'Không thể kết nối với dịch vụ cơ sở dữ liệu Google.');
         }
       } finally {
         if (isMounted) {
@@ -615,8 +800,8 @@ export default function App() {
 
     checkGoogleDb(true);
 
-    // Recheck health only (no state override) after 5 minutes to ensure connection is steady
-    const intervalId = setInterval(() => checkGoogleDb(false), 300000);
+    // Recheck and pull database changes every 60 seconds (1 minute) for quick parallel real-life sync
+    const intervalId = setInterval(() => checkGoogleDb(false), 60000);
 
     return () => {
       isMounted = false;
@@ -624,60 +809,143 @@ export default function App() {
     };
   }, [config.googleScriptsUrl]);
 
-  // Auto background sync of state to Google Sheets on modification
+  // Auto background sync of state to database on modification with bidirectional smart merging
   useEffect(() => {
     if (!isInitialLoadDone || !config.googleScriptsUrl || dbHealth === 'noconfig') return;
 
     const timer = setTimeout(() => {
       const triggerPush = async () => {
-        setIsPushingState('pushing');
-        try {
-          const payload = {
-            action: 'push',
-            data: {
-              users,
-              students,
-              tuitionPayments: payments,
-              bankTransfers,
-              announcements
-            }
-          };
+        if (isSyncingRef.current) {
+          // If a sync is already in flight, retry in 200ms
+          setTimeout(triggerPush, 200);
+          return;
+        }
 
-          const resp = await fetch(config.googleScriptsUrl!, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8'
-            },
-            redirect: 'follow'
+        // Quick serialization check to avoid redundant sync runs if nothing changed locally
+        const currentPayloadStr = JSON.stringify({
+          users,
+          students,
+          tuitionPayments: payments,
+          bankTransfers,
+          announcements
+        });
+
+        if (lastActivePushRef.current === currentPayloadStr) {
+          return;
+        }
+
+        isSyncingRef.current = true;
+        setIsPushingState('pushing');
+
+        try {
+          // 1. PULL LATEST DB STATE TO CO-PARENT A MERGE
+          const controller = new AbortController();
+          const fetchTimeoutId = setTimeout(() => controller.abort(), 8000);
+
+          const respFetch = await fetch(`${config.googleScriptsUrl}?action=fetch`, {
+            method: 'GET',
+            redirect: 'follow',
+            signal: controller.signal
           });
-          
-          if (!resp.ok) {
-            throw new Error(`HTTP ${resp.status}`);
+          clearTimeout(fetchTimeoutId);
+
+          if (!respFetch.ok) {
+            throw new Error(`Pull error: HTTP ${respFetch.status}`);
           }
-          
-          const result = await resp.json();
-          if (result.status === 'success') {
-            setIsPushingState('success');
-            setPushErrorMessage('');
-            setTimeout(() => {
-              setIsPushingState(prev => prev === 'success' ? 'idle' : prev);
-            }, 3000);
+
+          const resData = await respFetch.json();
+          if (resData.status === 'success' && resData.data) {
+            // Unify with the robust, shared bidirectional merge algorithm
+            const merged = mergeBidirectionalData(
+              resData.data,
+              students,
+              payments,
+              bankTransfers,
+              announcements,
+              users
+            );
+
+            // Apply merged results to state & localStorage
+            if (JSON.stringify(merged.students) !== JSON.stringify(students)) {
+              setStudents(merged.students);
+              localStorage.setItem('mec_students', JSON.stringify(merged.students));
+            }
+            if (JSON.stringify(merged.payments) !== JSON.stringify(payments)) {
+              setPayments(merged.payments);
+              localStorage.setItem('mec_payments', JSON.stringify(merged.payments));
+            }
+            if (JSON.stringify(merged.bankTransfers) !== JSON.stringify(bankTransfers)) {
+              setBankTransfers(merged.bankTransfers);
+              localStorage.setItem('mec_bank_transfers', JSON.stringify(merged.bankTransfers));
+            }
+            if (JSON.stringify(merged.announcements) !== JSON.stringify(announcements)) {
+              setAnnouncements(merged.announcements);
+              localStorage.setItem('mec_announcements', JSON.stringify(merged.announcements));
+            }
+            if (JSON.stringify(merged.users) !== JSON.stringify(users)) {
+              setUsers(merged.users);
+              localStorage.setItem('vxq_users', JSON.stringify(merged.users));
+            }
+
+            // --- 2. PUSH FULLY UNIFIED UNION STATE TO THE SHEET ---
+            const finalPayload = {
+              action: 'push',
+              data: {
+                users: merged.users,
+                students: merged.students,
+                tuitionPayments: merged.payments,
+                bankTransfers: merged.bankTransfers,
+                announcements: merged.announcements
+              }
+            };
+
+            const resp = await fetch(config.googleScriptsUrl!, {
+              method: 'POST',
+              body: JSON.stringify(finalPayload),
+              headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+              },
+              redirect: 'follow'
+            });
+
+            if (!resp.ok) {
+              throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const result = await resp.json();
+            if (result.status === 'success') {
+              setIsPushingState('success');
+              setPushErrorMessage('');
+              lastActivePushRef.current = JSON.stringify({
+                users: merged.users,
+                students: merged.students,
+                tuitionPayments: merged.payments,
+                bankTransfers: merged.bankTransfers,
+                announcements: merged.announcements
+              });
+              setTimeout(() => {
+                setIsPushingState(prev => prev === 'success' ? 'idle' : prev);
+              }, 2500);
+            } else {
+              throw new Error(result.message || 'Lỗi script từ tập lệnh Google');
+            }
           } else {
-            throw new Error(result.message || 'Lỗi script từ tập lệnh Google');
+            throw new Error('Lỗi liên lạc: script không trả về cấu trúc thích hợp.');
           }
         } catch (err: any) {
           console.error('[Sync Error]', err);
           setIsPushingState('error');
-          setPushErrorMessage(err.message || 'Không thể kết nối tự động lưu');
+          setPushErrorMessage(err.message || 'Không thể đồng bộ tự động');
+        } finally {
+          isSyncingRef.current = false;
         }
       };
-      
+
       triggerPush();
-    }, 2500);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [students, payments, bankTransfers, announcements, users, isInitialLoadDone, config.googleScriptsUrl]);
+  }, [students, payments, bankTransfers, announcements, users, isInitialLoadDone, config.googleScriptsUrl, deletedTransferIds, deletedAnnouncementIds]);
 
   // Redirect protection for unauthorized or non-admin users
   useEffect(() => {
@@ -1218,6 +1486,12 @@ export default function App() {
     setAnnouncements(updated);
     updateLocalStorage('mec_announcements', updated);
 
+    setDeletedAnnouncementIds(prev => {
+      const next = [...prev, annId];
+      localStorage.setItem('mec_deleted_announcements', JSON.stringify(next));
+      return next;
+    });
+
     appendAuditLog('ANNOUNCEMENT', annId, 'DELETE', oldSum, 'Tháo gỡ tin thông báo');
   };
 
@@ -1263,6 +1537,12 @@ export default function App() {
     const updated = bankTransfers.filter(t => t.transferId !== trfId);
     setBankTransfers(updated);
     updateLocalStorage('mec_bank_transfers', updated);
+
+    setDeletedTransferIds(prev => {
+      const next = [...prev, trfId];
+      localStorage.setItem('mec_deleted_transfers', JSON.stringify(next));
+      return next;
+    });
 
     appendAuditLog('TRANSFER', trfId, 'DELETE', oldVal, 'Xóa bản ghi nhận chuyển khoản khỏi sổ sách');
   };

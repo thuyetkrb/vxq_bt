@@ -490,6 +490,140 @@ function writeSheetData(sheetName, list) {
     }
   };
 
+  const handleRestoreFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+      setSyncStatus('error');
+      setSyncMessage('Vui lòng chọn tệp định dạng JSON (.json) hợp lệ!');
+      return;
+    }
+
+    if (!window.confirm('Cảnh báo! Khôi phục cơ sở dữ liệu sẽ thay thế và ghi đè HOÀN TOÀN danh sách võ sinh, hóa đơn, chuyển khoản hiện có trên thiết bị của bạn. Bạn có muốn tiếp tục không?')) {
+      e.target.value = '';
+      return;
+    }
+
+    setSyncStatus('loading');
+    setSyncMessage('Đang xử lý khôi phục cơ sở dữ liệu từ tệp JSON...');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const d = JSON.parse(text);
+
+        if (!d || typeof d !== 'object') {
+          throw new Error('Cấu trúc tập tin backup JSON không đúng!');
+        }
+
+        const parsedStudents: Student[] = Array.isArray(d.students) ? d.students.map((s: any) => ({
+          studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
+          fullName: String(s.fullName || ''),
+          nickname: s.nickname ? String(s.nickname) : undefined,
+          dateOfBirth: String(s.dateOfBirth || ''),
+          gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
+          parentName: String(s.parentName || ''),
+          parentPhone: String(s.parentPhone || ''),
+          phone: s.phone ? String(s.phone) : undefined,
+          address: String(s.address || ''),
+          email: String(s.email || ''),
+          classId: s.classId ? String(s.classId) : undefined,
+          tuitionFee: parseFloat(s.tuitionFee) || 0,
+          discount: parseFloat(s.discount) || 0,
+          note: String(s.note || ''),
+          activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
+          enrollmentDate: String(s.enrollmentDate || ''),
+          createdAt: String(s.createdAt || new Date().toISOString()),
+          updatedAt: String(s.updatedAt || new Date().toISOString())
+        })) : [];
+
+        const rawPayments = d.tuitionPayments || d.payments;
+        const parsedPayments: TuitionPayment[] = Array.isArray(rawPayments) ? rawPayments.map((p: any) => ({
+          paymentId: String(p.paymentId || ''),
+          studentId: String(p.studentId || '').replace(/^STUD-/, 'VS-'),
+          classId: p.classId ? String(p.classId) : undefined,
+          month: parseInt(p.month) || new Date().getMonth() + 1,
+          year: parseInt(p.year) || new Date().getFullYear(),
+          amount: parseFloat(p.amount) || 0,
+          paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
+          paidDate: p.paidDate ? String(p.paidDate) : undefined,
+          collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
+          receiptNo: String(p.receiptNo || ''),
+          note: String(p.note || ''),
+          createdAt: String(p.createdAt || new Date().toISOString()),
+          updatedAt: String(p.updatedAt || new Date().toISOString())
+        })) : [];
+
+        const parsedTransfers: BankTransfer[] = Array.isArray(d.bankTransfers) ? d.bankTransfers.map((b: any) => ({
+          transferId: String(b.transferId || ''),
+          studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
+          month: parseInt(b.month) || new Date().getMonth() + 1,
+          year: parseInt(b.year) || new Date().getFullYear(),
+          transferDate: String(b.transferDate || ''),
+          amount: parseFloat(b.amount) || 0,
+          note: String(b.note || ''),
+          createdBy: String(b.createdBy || ''),
+          createdAt: String(b.createdAt || new Date().toISOString())
+        })) : [];
+
+        const parsedUsers: User[] = Array.isArray(d.users) ? d.users.map((u: any) => {
+          let role = u.role as UserRole;
+          if (role === 'SUPPER_ADMIN') {
+            role = 'SUPER_ADMIN';
+          }
+          return {
+            username: String(u.username || ''),
+            fullName: String(u.fullName || ''),
+            role: role,
+            isActive: String(u.isActive).toUpperCase() === 'TRUE' || u.isActive === true || u.isActive === 1,
+            password: u.password ? String(u.password) : undefined
+          };
+        }) : [];
+
+        const parsedAnnouncements: Announcement[] = Array.isArray(d.announcements) ? d.announcements.map((a: any) => ({
+          announcementId: String(a.announcementId || ''),
+          type: (a.type === 'news' || a.type === 'internal') ? a.type : 'internal',
+          title: String(a.title || ''),
+          content: String(a.content || ''),
+          createdBy: String(a.createdBy || ''),
+          createdAt: String(a.createdAt || new Date().toISOString()),
+          updatedAt: String(a.updatedAt || new Date().toISOString()),
+          pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
+        })) : [];
+
+        if (parsedStudents.length === 0 && parsedPayments.length === 0 && parsedTransfers.length === 0 && parsedUsers.length === 0 && parsedAnnouncements.length === 0) {
+          throw new Error('Tệp tin thiết lập trống hoặc không đúng cấu trúc ứng dụng võ quán.');
+        }
+
+        onSyncImport({
+          students: parsedStudents.length > 0 ? parsedStudents : undefined,
+          payments: parsedPayments.length > 0 ? parsedPayments : undefined,
+          bankTransfers: parsedTransfers.length > 0 ? parsedTransfers : undefined,
+          users: parsedUsers.length > 0 ? parsedUsers : undefined,
+          announcements: parsedAnnouncements.length > 0 ? parsedAnnouncements : undefined
+        });
+
+        setSyncStatus('success');
+        setSyncMessage(`Phục hồi (Restore) thành công dữ liệu từ tệp sao lưu! Đã khôi phục ${parsedStudents.length} Võ sinh, ${parsedPayments.length} Hóa đơn, ${parsedTransfers.length} Chuyển khoản, ${parsedUsers.length} Tài khoản.`);
+      } catch (err: any) {
+        setSyncStatus('error');
+        setSyncMessage(`Lỗi trong lúc khôi phục dữ liệu: ${err.message || 'vui lòng kiểm tra lại tính hợp lệ của tệp backup JSON.'}`);
+      } finally {
+        e.target.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      setSyncStatus('error');
+      setSyncMessage('Không thể đọc tệp sao lưu đã chọn.');
+      e.target.value = '';
+    };
+
+    reader.readAsText(file);
+  };
+
   const handleSyncPush = async () => {
     if (!googleScriptsUrl) {
       setSyncStatus('error');
@@ -964,6 +1098,21 @@ function writeSheetData(sheetName, list) {
                 <Database className="h-4 w-4 text-sky-600" />
                 💾 Sao lưu CSDL (BACKUP)
               </button>
+
+              <label
+                htmlFor="restore-db-file-input"
+                className="flex items-center justify-center gap-1.5 font-bold text-amber-800 bg-[#fef3c7] hover:bg-[#fde68a] border border-[#fcd34d] px-4 py-2 rounded-lg transition cursor-pointer text-center select-none"
+              >
+                <Upload className="h-4 w-4 text-amber-750 shrink-0" />
+                📂 Phục hồi CSDL (RESTORE)
+              </label>
+              <input
+                type="file"
+                id="restore-db-file-input"
+                accept=".json"
+                onChange={handleRestoreFileChange}
+                className="hidden"
+              />
 
               <button
                 type="button"
