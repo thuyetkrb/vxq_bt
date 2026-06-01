@@ -144,7 +144,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const saved = localStorage.getItem('vxq_remembered_auth');
     const savedUsersStr = localStorage.getItem('vxq_users');
-    const list: User[] = savedUsersStr ? JSON.parse(savedUsersStr) : MOCK_USERS;
+    let list: User[] = MOCK_USERS;
+    if (savedUsersStr) {
+      try {
+        list = JSON.parse(savedUsersStr);
+      } catch (e) {
+        console.error('Error parsing vxq_users in currentUser initialization', e);
+      }
+    }
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -244,16 +251,26 @@ export default function App() {
     } else {
       // Hydro payments
       const lcPayments = localStorage.getItem('mec_payments');
-      if (lcPayments) setPayments(JSON.parse(lcPayments));
-      else {
+      if (lcPayments) {
+        try {
+          setPayments(JSON.parse(lcPayments));
+        } catch (e) {
+          setPayments(INITIAL_PAYMENTS);
+        }
+      } else {
         setPayments(INITIAL_PAYMENTS);
         localStorage.setItem('mec_payments', JSON.stringify(INITIAL_PAYMENTS));
       }
 
       // Hydro bank transfers
       const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
-      if (lcBankTransfers) setBankTransfers(JSON.parse(lcBankTransfers));
-      else {
+      if (lcBankTransfers) {
+        try {
+          setBankTransfers(JSON.parse(lcBankTransfers));
+        } catch (e) {
+          setBankTransfers(INITIAL_BANK_TRANSFERS);
+        }
+      } else {
         setBankTransfers(INITIAL_BANK_TRANSFERS);
         localStorage.setItem('mec_bank_transfers', JSON.stringify(INITIAL_BANK_TRANSFERS));
       }
@@ -261,16 +278,26 @@ export default function App() {
 
     // Hydro transfers
     const lcTransfers = localStorage.getItem('mec_transfers');
-    if (lcTransfers) setTransfers(JSON.parse(lcTransfers));
-    else {
+    if (lcTransfers) {
+      try {
+        setTransfers(JSON.parse(lcTransfers));
+      } catch (e) {
+        setTransfers(INITIAL_TRANSFERS);
+      }
+    } else {
       setTransfers(INITIAL_TRANSFERS);
       localStorage.setItem('mec_transfers', JSON.stringify(INITIAL_TRANSFERS));
     }
 
     // Hydro announcements
     const lcAnns = localStorage.getItem('mec_announcements');
-    if (lcAnns) setAnnouncements(JSON.parse(lcAnns));
-    else {
+    if (lcAnns) {
+      try {
+        setAnnouncements(JSON.parse(lcAnns));
+      } catch (e) {
+        setAnnouncements(INITIAL_ANNOUNCEMENTS);
+      }
+    } else {
       setAnnouncements(INITIAL_ANNOUNCEMENTS);
       localStorage.setItem('mec_announcements', JSON.stringify(INITIAL_ANNOUNCEMENTS));
     }
