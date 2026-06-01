@@ -313,6 +313,7 @@ export default function App() {
       try {
         let parsed = JSON.parse(lcConfig);
         // Migrate old English center data to Vịnh Xuân Quyền - Nam Anh Quang
+        let needsSave = false;
         if (
           !parsed.centerName ||
           parsed.centerName.includes('Minh Đức') || 
@@ -328,6 +329,24 @@ export default function App() {
             phone: '0938 372 286',
             receiptPrefix: 'VXQ'
           };
+          needsSave = true;
+        }
+
+        // Migrate to newly deployed Google Scripts macro
+        if (
+          !parsed.googleScriptsUrl || 
+          parsed.googleScriptsId === 'AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q' ||
+          parsed.googleScriptsUrl.includes('AKfycbzAvMiTSvOInEbHkjwrnD_lrHVDjXqHm4ai5IhGNYaRorfsh8Rhl-cbMGqLz3QQLB-G_Q')
+        ) {
+          parsed = {
+            ...parsed,
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ/exec',
+            googleScriptsId: 'AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ'
+          };
+          needsSave = true;
+        }
+
+        if (needsSave) {
           localStorage.setItem('mec_config', JSON.stringify(parsed));
         }
         setConfig(parsed);
@@ -359,7 +378,7 @@ export default function App() {
     const checkGoogleDb = async () => {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout trigger
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout trigger
 
         const resp = await fetch(`${config.googleScriptsUrl}?action=fetch`, {
           method: 'GET',
@@ -372,7 +391,13 @@ export default function App() {
           throw new Error(`Phản hồi mạng lỗi HTTP ${resp.status}`);
         }
 
-        const resData = await resp.json();
+        let resData;
+        try {
+          resData = await resp.json();
+        } catch (jsonErr) {
+          throw new Error('Lỗi cú pháp phản hồi (JSON parse error). Script đang trả về trang HTML/văn bản thay vì dữ liệu JSON. Thường là do bạn chưa cấp quyền "Authorize Access" khi chạy thử Script hoặc chưa đồng ý phân quyền kết nối tài khoản Google Sheets của mình.');
+        }
+
         if (resData.status === 'success') {
           if (isMounted) {
             setDbHealth('connected');
@@ -384,7 +409,13 @@ export default function App() {
       } catch (err: any) {
         if (isMounted) {
           setDbHealth('error');
-          setDbErrorMsg(err.message || 'Không thể kết nối hoặc thiết lập phân quyền "Anyone" chưa đúng.');
+          let customMsg = err.message || '';
+          if (err.name === 'AbortError') {
+            customMsg = 'Thời gian kết nối quá hạn (Hơn 8 giây). Script của bạn không phản hồi hoặc URL cấu hình bị sai.';
+          } else if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
+            customMsg = 'Lỗi mạng hoặc chặn CORS. Hãy chắc chắn rằng bạn đã: 1) Chọn cấu hình quyền truy cập (Who has access) của Web App là "Anyone" (Bất kỳ ai), KHÔNG chọn "Only myself"; 2) ID/URL Web App triển khai chính xác dạng kết thúc bằng "/exec", không phải liên kết trang chỉnh sửa "/edit".';
+          }
+          setDbErrorMsg(customMsg || 'Không thể kết nối hoặc thiết lập phân quyền "Anyone" chưa đúng.');
         }
       }
     };

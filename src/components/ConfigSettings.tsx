@@ -163,6 +163,9 @@ function doPost(e) {
 
 function readSheetData(sheetName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    throw new Error("Không tìm thấy Bảng tính liên kết. Tìm thấy null khi gọi getActiveSpreadsheet(). Điều này xảy ra nếu bạn tạo Apps Script Độc lập thay vì tạo từ menu 'Tiện ích mở rộng > Apps Script' bên trong chính file Google Sheets của bạn. Vui lòng bấm nút mở Trang tính trước rồi mới nhấn tạo Apps Script.");
+  }
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   var rows = sheet.getDataRange().getValues();
@@ -185,6 +188,9 @@ function readSheetData(sheetName) {
 
 function writeSheetData(sheetName, list) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    throw new Error("Không tìm thấy Bảng tính liên kết. Tìm thấy null khi gọi getActiveSpreadsheet(). Điều này xảy ra nếu bạn tạo Apps Script Độc lập thay vì tạo từ menu 'Tiện ích mở rộng > Apps Script' bên trong chính file Google Sheets của bạn. Vui lòng bấm nút mở Trang tính trước rồi mới nhấn tạo Apps Script.");
+  }
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -238,8 +244,22 @@ function writeSheetData(sheetName, list) {
     setSyncStatus('loading');
     setSyncMessage('Đang kết nối thử nghiệm đến Google Apps Script...');
     try {
+      if (googleScriptsUrl.includes('/edit') || googleScriptsUrl.includes('/home/projects')) {
+        throw new Error('Bạn đang dán nhầm liên kết trang chỉnh sửa Code Apps Script (đuôi /edit hoặc /home/projects) thay vì địa chỉ Web App thực thi (/exec). Vui lòng triển khai lại dạng Web App và sao chép đúng URL kết thúc bằng "/exec".');
+      }
+
       const resp = await fetch(`${googleScriptsUrl}?action=fetch`, { method: 'GET', redirect: 'follow' });
-      const result = await resp.json();
+      if (!resp.ok) {
+        throw new Error(`Phản hồi mạng lỗi HTTP ${resp.status}`);
+      }
+
+      let result;
+      try {
+        result = await resp.json();
+      } catch (jsonErr) {
+        throw new Error('Dữ liệu phản hồi thu được là trang HTML/văn bản thay vì JSON. Nguyên nhân cao nhất là bạn CHƯA đồng ý cấp quyền truy cập tài khoản Google Sheets của mình (Authorize Access) trên Apps Script, hoặc chưa nhấn lưu và Triển khai dạng Web App.');
+      }
+
       if (result.status === 'success') {
         setSyncStatus('success');
         setSyncMessage('Kết nối thành công! Đã kết nối thông suốt với Google Sheets.');
@@ -249,7 +269,11 @@ function writeSheetData(sheetName, list) {
       }
     } catch (e: any) {
       setSyncStatus('error');
-      setSyncMessage(`Không thể kết nối. Hãy đảm bảo bạn đã triển khai Web App với quyền truy cập "Anyone" (Bất kỳ ai). Chi tiết: ${e.message}`);
+      let customMsg = e.message || '';
+      if (e.message && (e.message.includes('fetch') || e.message.includes('Failed to fetch') || e.message.includes('TypeError'))) {
+        customMsg = 'Lỗi kết nối mạng hoặc CORS. Thường gặp khi bạn cấu hình quyền truy cập (Who has access) của Web App là "Only myself" (Chỉ mình tôi). Hãy đổi lại cấu hình triển khai thành "Anyone" (Bất kỳ ai / Bất kỳ ai, cả người ẩn danh) và thử lại.';
+      }
+      setSyncMessage(`Không thể kết nối. Chi tiết: ${customMsg}`);
     }
   };
 
@@ -265,8 +289,22 @@ function writeSheetData(sheetName, list) {
     setSyncStatus('loading');
     setSyncMessage('Đang tải dữ liệu từ Google Sheets về máy...');
     try {
+      if (googleScriptsUrl.includes('/edit') || googleScriptsUrl.includes('/home/projects')) {
+        throw new Error('Bạn đang dán nhầm liên kết trang chỉnh sửa Code Apps Script (đuôi /edit) thay vì URL Web App thực thi (/exec). Vui lòng triển khai lại dạng Web App và cấu hình đúng địa điểm.');
+      }
+
       const resp = await fetch(`${googleScriptsUrl}?action=fetch`, { method: 'GET', redirect: 'follow' });
-      const result = await resp.json();
+      if (!resp.ok) {
+        throw new Error(`Phản hồi mạng lỗi HTTP ${resp.status}`);
+      }
+
+      let result;
+      try {
+        result = await resp.json();
+      } catch (jsonErr) {
+        throw new Error('Dữ liệu thu được không phải định dạng JSON hợp lệ (có thể là trang HTML lỗi hoặc trang login của Google). Hãy chắc chắn rằng bạn đã bấm cấp quyền "Authorize Access" khi chạy thử Script và Chọn mục "Anyone" (Bất kỳ ai) ở mục quyển truy cập.');
+      }
+
       if (result.status === 'success' && result.data) {
         const d = result.data;
         
@@ -353,7 +391,11 @@ function writeSheetData(sheetName, list) {
       }
     } catch (e: any) {
       setSyncStatus('error');
-      setSyncMessage(`Lỗi trong lúc kết nối lấy dữ liệu: ${e.message}`);
+      let customMsg = e.message || '';
+      if (e.message && (e.message.includes('fetch') || e.message.includes('Failed to fetch') || e.message.includes('TypeError'))) {
+        customMsg = 'Lỗi kết nối mạng hoặc CORS. Thường xảy ra khi quyền truy cập Web App chưa chọn là "Anyone" (Bất kỳ ai), hoặc dùng nhầm link trang chỉnh sửa code /edit.';
+      }
+      setSyncMessage(`Lỗi trong lúc kết nối lấy dữ liệu: ${customMsg}`);
     }
   };
 
@@ -388,7 +430,17 @@ function writeSheetData(sheetName, list) {
         },
         redirect: 'follow'
       });
-      const result = await resp.json();
+      if (!resp.ok) {
+        throw new Error(`Phản hồi mạng trả về mã lỗi HTTP ${resp.status}`);
+      }
+
+      let result;
+      try {
+        result = await resp.json();
+      } catch (jsonErr) {
+        throw new Error('Dữ liệu trả về bị lỗi phân tích JSON (nhận được trang HTML). Vui lòng đảm bảo bạn đã cấp quyền chạy Script truy cập Sheets đầy đủ.');
+      }
+
       if (result.status === 'success') {
         setSyncStatus('success');
         setSyncMessage('Đồng bộ tải lên (PUSH) thành công rực rỡ! Bảng dữ liệu của bạn trên Google Sheets đã được cập nhật đồng bộ hoàn toàn.');
@@ -398,7 +450,11 @@ function writeSheetData(sheetName, list) {
       }
     } catch (e: any) {
       setSyncStatus('error');
-      setSyncMessage(`Lỗi đồng bộ đẩy dữ liệu: ${e.message}`);
+      let customMsg = e.message || '';
+      if (e.message && (e.message.includes('fetch') || e.message.includes('Failed to fetch') || e.message.includes('TypeError'))) {
+        customMsg = 'Lỗi kết nối mạng hoặc CORS. Thường xảy ra khi cấu hình quyền truy cập (Who has access) của Web App chưa chọn là "Anyone" (Bất kỳ ai / Bất kỳ ai, cả người ẩn danh).';
+      }
+      setSyncMessage(`Lỗi đồng bộ đẩy dữ liệu: ${customMsg}`);
     }
   };
 
