@@ -204,6 +204,9 @@ export default function App() {
   // Database connectivity health states
   const [dbHealth, setDbHealth] = useState<'checking' | 'connected' | 'error' | 'noconfig'>('checking');
   const [dbErrorMsg, setDbErrorMsg] = useState<string>('');
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
+  const [isPushingState, setIsPushingState] = useState<'idle' | 'pushing' | 'success' | 'error'>('idle');
+  const [pushErrorMessage, setPushErrorMessage] = useState('');
 
   // CRUD & Search Helper states
   const [searchClass, setSearchClass] = useState('');
@@ -430,6 +433,7 @@ export default function App() {
   useEffect(() => {
     if (!config.googleScriptsUrl) {
       setDbHealth('noconfig');
+      setIsInitialLoadDone(true);
       return;
     }
 
@@ -585,6 +589,10 @@ export default function App() {
           }
           setDbErrorMsg(customMsg || 'Không thể kết nối hoặc thiết lập phân quyền "Anyone" chưa đúng.');
         }
+      } finally {
+        if (isMounted) {
+          setIsInitialLoadDone(true);
+        }
       }
     };
 
@@ -598,6 +606,61 @@ export default function App() {
       clearInterval(intervalId);
     };
   }, [config.googleScriptsUrl]);
+
+  // Auto background sync of state to Google Sheets on modification
+  useEffect(() => {
+    if (!isInitialLoadDone || !config.googleScriptsUrl || dbHealth === 'noconfig') return;
+
+    const timer = setTimeout(() => {
+      const triggerPush = async () => {
+        setIsPushingState('pushing');
+        try {
+          const payload = {
+            action: 'push',
+            data: {
+              users,
+              students,
+              tuitionPayments: payments,
+              bankTransfers,
+              announcements
+            }
+          };
+
+          const resp = await fetch(config.googleScriptsUrl!, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            },
+            redirect: 'follow'
+          });
+          
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+          }
+          
+          const result = await resp.json();
+          if (result.status === 'success') {
+            setIsPushingState('success');
+            setPushErrorMessage('');
+            setTimeout(() => {
+              setIsPushingState(prev => prev === 'success' ? 'idle' : prev);
+            }, 3000);
+          } else {
+            throw new Error(result.message || 'Lỗi script từ tập lệnh Google');
+          }
+        } catch (err: any) {
+          console.error('[Sync Error]', err);
+          setIsPushingState('error');
+          setPushErrorMessage(err.message || 'Không thể kết nối tự động lưu');
+        }
+      };
+      
+      triggerPush();
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [students, payments, bankTransfers, announcements, users, isInitialLoadDone, config.googleScriptsUrl]);
 
   // Redirect protection for unauthorized or non-admin users
   useEffect(() => {
@@ -1502,6 +1565,50 @@ export default function App() {
                 </>
               )}
             </div>
+
+            {/* Auto background save monitor indicator badge */}
+            {config.googleScriptsUrl && dbHealth !== 'noconfig' && (
+              <div 
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold shadow-3xs select-none transition-all duration-300 ${
+                  isPushingState === 'pushing' ? 'border-amber-100 bg-amber-50/50 text-amber-800' :
+                  isPushingState === 'success' ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800' :
+                  isPushingState === 'error' ? 'border-rose-100 bg-rose-50/50 text-rose-800' :
+                  'border-sky-100 bg-sky-50/20 text-sky-700'
+                }`}
+                title="Trạng thái đồng bộ tự động lưu của dữ liệu"
+              >
+                {isPushingState === 'pushing' && (
+                  <>
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                    </span>
+                    <span className="animate-pulse">Đang tự lưu...</span>
+                  </>
+                )}
+                {isPushingState === 'success' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce"></span>
+                    <span>Đã lưu Sheets</span>
+                  </>
+                )}
+                {isPushingState === 'error' && (
+                  <>
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-600"></span>
+                    </span>
+                    <span className="text-rose-700 font-extrabold cursor-pointer" title={pushErrorMessage}>Lỗi lưu Sheets ⚠️</span>
+                  </>
+                )}
+                {isPushingState === 'idle' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
+                    <span>Đã đồng bộ</span>
+                  </>
+                )}
+              </div>
+            )}
 
             {isLoggedIn ? (
               <div className="flex items-center gap-3">
