@@ -248,12 +248,52 @@ export default function App() {
     let useInitialStudents = false;
     if (lcStudents) {
       try {
-        const parsed = JSON.parse(lcStudents);
-        if (parsed.some((s: any) => s.studentId && s.studentId.startsWith('STUD-'))) {
-          useInitialStudents = true;
-        } else {
-          setStudents(parsed);
+        let parsed = JSON.parse(lcStudents) as any[];
+        let migrated = false;
+        
+        parsed = parsed.map((s: any) => {
+          if (s.studentId && s.studentId.startsWith('STUD-')) {
+            migrated = true;
+            return { ...s, studentId: s.studentId.replace('STUD-', 'VS-') };
+          }
+          return s;
+        });
+
+        if (migrated) {
+          localStorage.setItem('mec_students', JSON.stringify(parsed));
+          
+          // Also migrate payments
+          const lcPayments = localStorage.getItem('mec_payments');
+          if (lcPayments) {
+            try {
+              let parsedPayments = JSON.parse(lcPayments);
+              parsedPayments = parsedPayments.map((p: any) => {
+                if (p.studentId && p.studentId.startsWith('STUD-')) {
+                  return { ...p, studentId: p.studentId.replace('STUD-', 'VS-') };
+                }
+                return p;
+              });
+              localStorage.setItem('mec_payments', JSON.stringify(parsedPayments));
+            } catch (e) {}
+          }
+
+          // Also migrate bank transfers
+          const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
+          if (lcBankTransfers) {
+            try {
+              let parsedBT = JSON.parse(lcBankTransfers);
+              parsedBT = parsedBT.map((b: any) => {
+                if (b.studentId && b.studentId.startsWith('STUD-')) {
+                  return { ...b, studentId: b.studentId.replace('STUD-', 'VS-') };
+                }
+                return b;
+              });
+              localStorage.setItem('mec_bank_transfers', JSON.stringify(parsedBT));
+            } catch (e) {}
+          }
         }
+        
+        setStudents(parsed);
       } catch (e) {
         useInitialStudents = true;
       }
@@ -431,7 +471,7 @@ export default function App() {
               // 1. Synchronize Students
               if (d.students && Array.isArray(d.students)) {
                 const parsedStudents = d.students.map((s: any) => ({
-                  studentId: String(s.studentId || ''),
+                  studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
                   fullName: String(s.fullName || ''),
                   nickname: s.nickname ? String(s.nickname) : undefined,
                   dateOfBirth: String(s.dateOfBirth || ''),
@@ -459,7 +499,7 @@ export default function App() {
               if (rawPayments && Array.isArray(rawPayments)) {
                 const parsedPayments = rawPayments.map((p: any) => ({
                   paymentId: String(p.paymentId || ''),
-                  studentId: String(p.studentId || ''),
+                  studentId: String(p.studentId || '').replace(/^STUD-/, 'VS-'),
                   classId: p.classId ? String(p.classId) : undefined,
                   month: parseInt(p.month) || new Date().getMonth() + 1,
                   year: parseInt(p.year) || new Date().getFullYear(),
@@ -480,7 +520,7 @@ export default function App() {
               if (d.bankTransfers && Array.isArray(d.bankTransfers)) {
                 const parsedTransfers = d.bankTransfers.map((b: any) => ({
                   transferId: String(b.transferId || ''),
-                  studentId: b.studentId ? String(b.studentId) : undefined,
+                  studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
                   month: parseInt(b.month) || new Date().getMonth() + 1,
                   year: parseInt(b.year) || new Date().getFullYear(),
                   transferDate: String(b.transferDate || ''),
@@ -896,7 +936,7 @@ export default function App() {
       appendAuditLog('STUDENT', editingStudent.studentId, 'UPDATE', oldValStr, JSON.stringify(newObj));
     } else {
       // Create student
-      const newId = `STUD-${String(students.length + 1).padStart(3, '0')}`;
+      const newId = `VS-${String(students.length + 1).padStart(3, '0')}`;
       const freshStud: Student = {
         studentId: newId,
         fullName: fullNameVal,

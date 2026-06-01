@@ -329,7 +329,7 @@ function writeSheetData(sheetName, list) {
         const d = result.data;
         
         const parsedStudents: Student[] = (d.students || []).map((s: any) => ({
-          studentId: String(s.studentId || ''),
+          studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
           fullName: String(s.fullName || ''),
           nickname: s.nickname ? String(s.nickname) : undefined,
           dateOfBirth: String(s.dateOfBirth || ''),
@@ -351,7 +351,7 @@ function writeSheetData(sheetName, list) {
 
         const parsedPayments: TuitionPayment[] = (d.tuitionPayments || d.payments || []).map((p: any) => ({
           paymentId: String(p.paymentId || ''),
-          studentId: String(p.studentId || ''),
+          studentId: String(p.studentId || '').replace(/^STUD-/, 'VS-'),
           classId: p.classId ? String(p.classId) : undefined,
           month: parseInt(p.month) || new Date().getMonth() + 1,
           year: parseInt(p.year) || new Date().getFullYear(),
@@ -367,7 +367,7 @@ function writeSheetData(sheetName, list) {
 
         const parsedTransfers: BankTransfer[] = (d.bankTransfers || []).map((b: any) => ({
           transferId: String(b.transferId || ''),
-          studentId: b.studentId ? String(b.studentId) : undefined,
+          studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
           month: parseInt(b.month) || new Date().getMonth() + 1,
           year: parseInt(b.year) || new Date().getFullYear(),
           transferDate: String(b.transferDate || ''),
