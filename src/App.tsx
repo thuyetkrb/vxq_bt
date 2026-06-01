@@ -355,12 +355,14 @@ export default function App() {
           parsed.googleScriptsId === 'AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ' ||
           parsed.googleScriptsUrl.includes('AKfycbxBmxCrsH_0_9Bg2ibX7m7iBF4hlK7q7-yavRP4ZWtLoIU3f_AaqJrdTQnZeuV71-JVAQ') ||
           parsed.googleScriptsId === 'AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A' ||
-          parsed.googleScriptsUrl.includes('AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A')
+          parsed.googleScriptsUrl.includes('AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A') ||
+          parsed.googleScriptsId === 'AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A' ||
+          parsed.googleScriptsUrl.includes('AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A')
         ) {
           parsed = {
             ...parsed,
-            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A/exec',
-            googleScriptsId: 'AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A'
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc/exec',
+            googleScriptsId: 'AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc'
           };
           needsSave = true;
         }
@@ -1533,12 +1535,8 @@ export default function App() {
                     Đăng nhập
                   </button>
                 </form>
-                {loginError ? (
+                {loginError && (
                   <span className="text-[10px] text-rose-600 font-bold bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded leading-none">{loginError}</span>
-                ) : (
-                  <span className="text-[8.5px] text-emerald-700/80 font-bold leading-none mr-2">
-                    💡 Đăng nhập tài khoản: <strong className="font-extrabold underline text-emerald-900">thuyethn</strong> (Mật khẩu: 123456) / <strong className="font-extrabold underline text-emerald-900">naquang</strong> (Mật khẩu: 123456) / <strong className="font-extrabold underline text-emerald-950">staff</strong> / <strong className="font-extrabold underline text-emerald-950">viewer</strong> (Mật khẩu giống tài khoản)
-                  </span>
                 )}
               </div>
             )}
