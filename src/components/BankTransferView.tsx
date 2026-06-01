@@ -23,7 +23,7 @@ import {
   Clock
 } from 'lucide-react';
 import { BankTransfer, Student, UserRole } from '../types';
-import { formatVND, exportToCSV, buildFilename, exportElementToJPG } from '../utils';
+import { formatVND, exportToCSV, buildFilename, exportElementToJPG, formatDateDMY } from '../utils';
 
 interface BankTransferViewProps {
   transfers: BankTransfer[];
@@ -230,17 +230,10 @@ export default function BankTransferView({
             className="flex items-center gap-1 text-[11px] font-bold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-3 py-2 rounded-lg transition-all shadow-3xs cursor-pointer"
             title="Xuất sang file hạch sổ"
           >
-            <Download className="h-3.5 w-3.5 text-gray-500" /> Xuất Excel
+            <Download className="h-3.5 w-3.5 text-gray-500" /> Xuất CSV
           </button>
 
-          <button
-            type="button"
-            onClick={() => exportElementToJPG('bank-transfers-container', buildFilename('so_chuyen_khoan_ngan_hang', 'jpg'))}
-            className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-3xs cursor-pointer"
-            title="Xuất file ảnh JPG"
-          >
-            <Download className="h-3.5 w-3.5 text-white/90" /> Xuất JPG
-          </button>
+
           
           {!showAddForm && !editingTransfer && (
             <button
@@ -495,7 +488,7 @@ export default function BankTransferView({
 
                       {/* Transfer date */}
                       <td className="px-4 py-2.5 text-center text-gray-500 font-mono text-[11px]">
-                        {t.transferDate}
+                        {formatDateDMY(t.transferDate)}
                       </td>
 
                       {/* Transfer Amount received */}

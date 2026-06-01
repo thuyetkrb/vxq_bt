@@ -76,6 +76,62 @@ export function buildFilename(prefix: string, ext: 'csv' | 'xlsx' | 'pdf' | 'png
 }
 
 /**
+ * Normalizes any date string (ISO timestamps, server dates) into a standard "YYYY-MM-DD" local date.
+ * If the date is already in "YYYY-MM-DD", it leaves it as-is.
+ */
+export function normalizeDateToLocalYMD(dateStr: string): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  
+  // If it's already exactly YYYY-MM-DD, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // Otherwise, parse and take the local date parts (year, month, date)
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {
+    console.error('Error normalizing date:', e);
+  }
+  
+  return trimmed;
+}
+
+/**
+ * Formats a YYYY-MM-DD or parseable date string into a clean Vietnamese local date format: DD/MM/YYYY
+ */
+export function formatDateDMY(dateStr: string): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const y = d.getFullYear();
+      return `${day}/${m}/${y}`;
+    }
+  } catch (e) {
+    // Ignore error and fall through
+  }
+  
+  return trimmed;
+}
+
+/**
  * Converts an OKLCH color string to standard sRGB format that html2canvas can parse
  */
 function oklchToRgb(oklchStr: string): string {

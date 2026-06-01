@@ -72,7 +72,9 @@ import {
   INITIAL_BANK_TRANSFERS
 } from './initialData';
 
-import { formatVND, exportToCSV, getMonthName, buildFilename, exportElementToJPG } from './utils';
+import { formatVND, exportToCSV, getMonthName, buildFilename, normalizeDateToLocalYMD } from './utils';
+// @ts-ignore
+import kungfuLogo from './assets/images/kungfu_logo_1780331143142.png';
 
 const getMonthRange = (currentM: number, currentY: number, beforeCount: number, afterCount: number) => {
   const range = [];
@@ -508,7 +510,7 @@ export default function App() {
           discount: parseFloat(s.discount) || 0,
           note: String(s.note || ''),
           activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
-          enrollmentDate: String(s.enrollmentDate || ''),
+          enrollmentDate: s.enrollmentDate ? normalizeDateToLocalYMD(String(s.enrollmentDate)) : '',
           createdAt: String(s.createdAt || new Date().toISOString()),
           updatedAt: String(s.updatedAt || new Date().toISOString())
         };
@@ -548,7 +550,7 @@ export default function App() {
           year: parseInt(p.year) || new Date().getFullYear(),
           amount: parseFloat(p.amount) || 0,
           paidStatus: p.paidStatus === 'Unpaid' ? 'Unpaid' : p.paidStatus === 'Exempted' ? 'Exempted' : 'Paid',
-          paidDate: p.paidDate ? String(p.paidDate) : undefined,
+          paidDate: p.paidDate ? normalizeDateToLocalYMD(String(p.paidDate)) : undefined,
           collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
           receiptNo: String(p.receiptNo || ''),
           note: String(p.note || ''),
@@ -589,7 +591,7 @@ export default function App() {
           studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
           month: parseInt(b.month) || new Date().getMonth() + 1,
           year: parseInt(b.year) || new Date().getFullYear(),
-          transferDate: String(b.transferDate || ''),
+          transferDate: b.transferDate ? normalizeDateToLocalYMD(String(b.transferDate)) : '',
           amount: parseFloat(b.amount) || 0,
           note: String(b.note || ''),
           createdBy: String(b.createdBy || ''),
@@ -1674,6 +1676,80 @@ export default function App() {
     appendAuditLog('EXPORT', 'TUITION', 'EXPORT', '', `Xuất báo cáo biên lai thanh toán tháng ${currentMonth}/${currentYear}`);
   };
 
+  const handleExportDashboardCSV = () => {
+    const computedRange = getMonthRange(currentMonth, currentYear, monthsBefore, monthsAfter);
+    
+    const reportData = students.filter(s => {
+      const matchSearch = s.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
+                          s.parentPhone.includes(dashboardSearch) || 
+                          (s.phone && s.phone.includes(dashboardSearch));
+      const matchStatus = s.activeStatus === 'Active';
+      return matchSearch && matchStatus;
+    }).map(st => {
+      const row: any = {
+        'ID Võ Sinh': st.studentId,
+        'Họ & Tên Võ Sinh': st.fullName,
+        'Gọi tên': st.nickname || '',
+        'SĐT học viên': st.phone || '',
+        'Học phí gốc': formatVND(st.tuitionFee),
+        'Tên phụ huynh': st.parentName || '',
+        'SĐT Phụ huynh': st.parentPhone || '',
+      };
+
+      computedRange.forEach(item => {
+        const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
+        const isCellPaid = cellPay?.paidStatus === 'Paid';
+        const isCellExempt = cellPay?.paidStatus === 'Exempted';
+
+        let hasJoined = true;
+        if (st.enrollmentDate) {
+          const parts = st.enrollmentDate.split('-');
+          if (parts.length >= 2) {
+            const enrollYear = parseInt(parts[0], 10);
+            const enrollMonth = parseInt(parts[1], 10);
+            if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
+              if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
+                hasJoined = false;
+              }
+            }
+          }
+        }
+
+        const colHeader = `T.${item.month}/${item.year}`;
+        if (!hasJoined) {
+          row[colHeader] = 'Chưa tham gia';
+        } else if (isCellExempt) {
+          row[colHeader] = 'Miễn học phí' + (cellPay?.note ? ` (${cellPay.note})` : '');
+        } else if (isCellPaid) {
+          row[colHeader] = `Đã nộp (${formatVND(cellPay?.amount || 0)})` + (cellPay?.paidDate ? ` ngày ${cellPay.paidDate}` : '');
+        } else {
+          row[colHeader] = `Chờ thu (${formatVND(st.tuitionFee)})`;
+        }
+      });
+
+      return row;
+    });
+
+    const dynamicHeaders = [
+      'ID Võ Sinh',
+      'Họ & Tên Võ Sinh',
+      'Gọi tên',
+      'SĐT học viên',
+      'Học phí gốc',
+      'Tên phụ huynh',
+      'SĐT Phụ huynh',
+      ...computedRange.map(item => `T.${item.month}/${item.year}`)
+    ];
+
+    exportToCSV(
+      reportData,
+      dynamicHeaders,
+      buildFilename('ma_tran_hoc_phi_tong_quan', 'csv', currentMonth, currentYear)
+    );
+    
+    appendAuditLog('EXPORT', 'DASHBOARD', 'EXPORT', '', `Xuất báo cáo ma trận học phí tháng ${currentMonth}/${currentYear}`);
+  };
+
   // -------------------------------------------------------------
   // ANALYTICAL METRICS
   // -------------------------------------------------------------
@@ -1699,7 +1775,7 @@ export default function App() {
       <header className="md:hidden flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2 sticky top-0 z-40 no-print">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-full overflow-hidden border border-emerald-205 bg-white flex items-center justify-center shadow-3xs">
-            <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src={kungfuLogo} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
           <span className="font-extrabold text-[11px] tracking-tight text-emerald-950 uppercase">Võ Quán Nam Anh Quang</span>
         </div>
@@ -1720,7 +1796,7 @@ export default function App() {
         {/* Brand Banner */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-emerald-50/60 bg-emerald-50/10">
           <span className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-emerald-200 bg-[#f0fdf4] shadow-xs select-none">
-            <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <img src={kungfuLogo} alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
           <div>
             <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">VXQ BÌNH TÂN</span>
@@ -2065,7 +2141,7 @@ export default function App() {
                     {!isLoggedIn ? (
                       <div className="bg-white rounded-xl border border-emerald-100 p-8 text-center max-w-md mx-auto space-y-5 shadow-3xs animate-fade-in">
                         <div className="mx-auto w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-200 bg-emerald-50 shadow-sm flex items-center justify-center">
-                          <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={kungfuLogo} alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         </div>
                         <div>
                           <h3 className="text-emerald-950 font-black text-sm uppercase tracking-wider font-sans">
@@ -2591,15 +2667,15 @@ export default function App() {
                     </div>
                   ) : null}
 
-                    {/* JPG Export Section */}
+                    {/* JPG & CSV Export Section */}
                     {isLoggedIn && (
-                      <div className="flex justify-end no-print pt-2" data-html2canvas-ignore="true">
+                      <div className="flex justify-end gap-3 no-print pt-2" data-html2canvas-ignore="true">
                         <button
                           type="button"
-                          onClick={() => exportElementToJPG('dashboard-container', buildFilename('bao_cao_tong_quan', 'jpg'))}
-                          className="flex items-center gap-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 px-4 py-2.5 rounded-xl transition-all shadow-3xs hover:shadow-2xs cursor-pointer"
+                          onClick={handleExportDashboardCSV}
+                          className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-850 px-4 py-2.5 rounded-xl transition-all shadow-3xs hover:shadow-2xs cursor-pointer"
                         >
-                          <Download className="h-4 w-4" /> Xuất JPG Tổng Quan
+                          <Download className="h-4 w-4" /> Xuất CSV Tổng Quan
                         </button>
                       </div>
                     )}
@@ -2625,14 +2701,7 @@ export default function App() {
                         onClick={handleExportStudents}
                         className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100/70 transition cursor-pointer"
                       >
-                        <Download className="h-4 w-4" /> Xuất Excel / CSV
-                      </button>
-
-                      <button
-                        onClick={() => exportElementToJPG('students-container', buildFilename('danh_sach_vo_sinh', 'jpg'))}
-                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
-                      >
-                        <Download className="h-4 w-4" /> Xuất JPG
+                        <Download className="h-4 w-4" /> Xuất dạng CSV
                       </button>
 
                       {currentUser.role !== 'VIEWER' && (
@@ -3031,13 +3100,6 @@ export default function App() {
                       >
                         <FileSpreadsheet className="h-4 w-4" /> Xuất bảng kê (Học phí)
                       </button>
-
-                      <button
-                        onClick={() => exportElementToJPG('tuition-container', buildFilename('so_chi_tiet_hoc_phi', 'jpg'))}
-                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer shadow-2xs"
-                      >
-                        <Download className="h-4 w-4" /> Xuất dạng JPG
-                      </button>
                     </div>
                   </div>
 
@@ -3419,7 +3481,7 @@ export default function App() {
         <footer className="no-print px-5 md:px-6 pb-6 pt-2 select-none">
           <div className="bg-[#f0fdf4] border border-emerald-100 rounded-2xl p-6 shadow-xs relative overflow-hidden">
             <div className="absolute top-0 right-2 p-4 opacity-10 pointer-events-none hidden md:block">
-              <img src="/src/assets/images/kungfu_logo_1780331143142.png" alt="Logo Kungfu" className="h-[120px] w-[120px] object-contain rounded-full" referrerPolicy="no-referrer" />
+              <img src={kungfuLogo} alt="Logo Kungfu" className="h-[120px] w-[120px] object-contain rounded-full" referrerPolicy="no-referrer" />
             </div>
             <div className="relative z-10 flex flex-col md:flex-row md:items-start md:justify-between gap-6">
               <div className="space-y-2.5">
