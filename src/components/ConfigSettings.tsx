@@ -126,7 +126,8 @@ function doGet(e) {
           students: readSheetData("Students"),
           tuitionPayments: readSheetData("TuitionPayments"),
           bankTransfers: readSheetData("BankTransfers"),
-          announcements: readSheetData("Announcements")
+          announcements: readSheetData("Announcements"),
+          history: readSheetData("History")
         }
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
@@ -149,6 +150,7 @@ function doPost(e) {
       if (data.tuitionPayments) writeSheetData("TuitionPayments", data.tuitionPayments);
       if (data.bankTransfers) writeSheetData("BankTransfers", data.bankTransfers);
       if (data.announcements) writeSheetData("Announcements", data.announcements);
+      if (data.history) writeSheetData("History", data.history);
       
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -204,7 +206,8 @@ function writeSheetData(sheetName, list) {
     "Students": ["studentId", "fullName", "nickname", "beltRank", "dateOfBirth", "gender", "parentName", "parentPhone", "phone", "address", "email", "classId", "tuitionFee", "discount", "note", "activeStatus", "enrollmentDate", "leaveDate", "createdAt", "updatedAt"],
     "TuitionPayments": ["paymentId", "studentId", "classId", "month", "year", "amount", "paidStatus", "paidDate", "collectedBy", "receiptNo", "note", "createdAt", "updatedAt"],
     "BankTransfers": ["transferId", "studentId", "month", "year", "transferDate", "amount", "note", "createdBy", "createdAt"],
-    "Announcements": ["announcementId", "type", "title", "content", "createdBy", "createdAt", "updatedAt", "pinned"]
+    "Announcements": ["announcementId", "type", "title", "content", "createdBy", "createdAt", "updatedAt", "pinned"],
+    "History": ["date", "user", "content"]
   };
 
   var headers = headersMap[sheetName];

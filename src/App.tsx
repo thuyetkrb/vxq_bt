@@ -56,7 +56,8 @@ import {
   AppConfig,
   User,
   UserRole,
-  BankTransfer
+  BankTransfer,
+  HistoryRecord
 } from './types';
 
 import {
@@ -123,6 +124,7 @@ import ReceiptModal from './components/ReceiptModal';
 import AnnouncementSection from './components/AnnouncementSection';
 import ConfigSettings from './components/ConfigSettings';
 import BankTransferView from './components/BankTransferView';
+import HistoryView from './components/HistoryView';
 
 export default function App() {
   // Mobile Navigation Drawer Toggle
@@ -130,7 +132,7 @@ export default function App() {
   
   // Active Sidebar Tab Tracker
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'students' | 'tuition' | 'news' | 'announcements' | 'config' | 'bank_transfers'
+    'dashboard' | 'students' | 'tuition' | 'news' | 'announcements' | 'config' | 'bank_transfers' | 'history'
   >('dashboard');
 
   // Accounts list state with Local Storage persistence
@@ -218,6 +220,10 @@ export default function App() {
   const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
+  const [history, setHistory] = useState<HistoryRecord[]>(() => {
+    const saved = localStorage.getItem('vxq_history');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // Sync locks and tracking lists for deleted items
   const isSyncingRef = useRef<boolean>(false);
@@ -233,6 +239,8 @@ export default function App() {
   announcementsStateRef.current = announcements;
   const usersStateRef = useRef<User[]>([]);
   usersStateRef.current = users;
+  const historyStateRef = useRef<HistoryRecord[]>([]);
+  historyStateRef.current = history;
   const [deletedTransferIds, setDeletedTransferIds] = useState<string[]>(() => {
     return JSON.parse(localStorage.getItem('mec_deleted_transfers') || '[]');
   });
@@ -480,12 +488,16 @@ export default function App() {
           parsed.googleScriptsId === 'AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A' ||
           parsed.googleScriptsUrl.includes('AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A') ||
           parsed.googleScriptsId === 'AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc' ||
-          parsed.googleScriptsUrl.includes('AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc')
+          parsed.googleScriptsUrl.includes('AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc') ||
+          parsed.googleScriptsId === 'AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA' ||
+          parsed.googleScriptsUrl.includes('AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA') ||
+          parsed.googleScriptsId === 'AKfycbz0ivabc1kKXZBXLl-e9McMY18zvHMVeKZlhg3LcBtzksR1LP94n7kZRKLXO0LP7JIMDA' ||
+          parsed.googleScriptsUrl.includes('AKfycbz0ivabc1kKXZBXLl-e9McMY18zvHMVeKZlhg3LcBtzksR1LP94n7kZRKLXO0LP7JIMDA')
         ) {
           parsed = {
             ...parsed,
-            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA/exec',
-            googleScriptsId: 'AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA'
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxIn3veSMqAUAa5-gVTevp3WH121TwQ_tAK55l6TsKXVyEPS3oQWCoVlfhhj0vFXXNQIg/exec',
+            googleScriptsId: 'AKfycbxIn3veSMqAUAa5-gVTevp3WH121TwQ_tAK55l6TsKXVyEPS3oQWCoVlfhhj0vFXXNQIg'
           };
           needsSave = true;
         }
@@ -517,7 +529,8 @@ export default function App() {
     localPayments: TuitionPayment[],
     localTransfers: BankTransfer[],
     localAnnouncements: Announcement[],
-    localUsers: User[]
+    localUsers: User[],
+    localHistory: HistoryRecord[]
   ) => {
     const getTime = (isoStr: string | undefined) => {
       if (!isoStr) return 0;
@@ -739,12 +752,39 @@ export default function App() {
     });
     const finalUsers = Array.from(mergedUsersMap.values());
 
+    // --- 5. MERGE HISTORY ---
+    let parsedRemoteHistory: HistoryRecord[] = [];
+    if (remoteData.history && Array.isArray(remoteData.history)) {
+      parsedRemoteHistory = remoteData.history.filter((h: any) => h && h.content).map((h: any) => ({
+        date: String(h.date || ''),
+        user: String(h.user || ''),
+        content: String(h.content || '')
+      }));
+    }
+
+    const mergedHistory = [...parsedRemoteHistory];
+    const historyKeys = new Set(parsedRemoteHistory.map(h => `${h.date}|${h.user}|${h.content}`));
+    localHistory.forEach(h => {
+      const key = `${h.date}|${h.user}|${h.content}`;
+      if (!historyKeys.has(key)) {
+        mergedHistory.push(h);
+        historyKeys.add(key);
+      }
+    });
+
+    mergedHistory.sort((a, b) => {
+      const timeA = a.date ? new Date(a.date.replace(' ', 'T')).getTime() : 0;
+      const timeB = b.date ? new Date(b.date.replace(' ', 'T')).getTime() : 0;
+      return timeB - timeA;
+    });
+
     return {
       students: finalStudents,
       payments: finalPayments,
       bankTransfers: finalTransfers,
       announcements: finalAnnouncements,
-      users: finalUsers
+      users: finalUsers,
+      history: mergedHistory
     };
   };
 
@@ -794,7 +834,8 @@ export default function App() {
               paymentsStateRef.current,
               bankTransfersStateRef.current,
               announcementsStateRef.current,
-              usersStateRef.current
+              usersStateRef.current,
+              historyStateRef.current
             );
 
             // Compare and update states safely to avoid re-renders or feedback loops
@@ -817,6 +858,10 @@ export default function App() {
             if (JSON.stringify(merged.users) !== JSON.stringify(usersStateRef.current)) {
               setUsers(merged.users);
               localStorage.setItem('vxq_users', JSON.stringify(merged.users));
+            }
+            if (JSON.stringify(merged.history) !== JSON.stringify(historyStateRef.current)) {
+              setHistory(merged.history);
+              localStorage.setItem('vxq_history', JSON.stringify(merged.history));
             }
           }
         } else if (resData.status !== 'success') {
@@ -869,7 +914,8 @@ export default function App() {
           students,
           tuitionPayments: payments,
           bankTransfers,
-          announcements
+          announcements,
+          history
         });
 
         if (lastActivePushRef.current === currentPayloadStr) {
@@ -904,7 +950,8 @@ export default function App() {
               payments,
               bankTransfers,
               announcements,
-              users
+              users,
+              history
             );
 
             // Apply merged results to state & localStorage
@@ -928,6 +975,10 @@ export default function App() {
               setUsers(merged.users);
               localStorage.setItem('vxq_users', JSON.stringify(merged.users));
             }
+            if (JSON.stringify(merged.history) !== JSON.stringify(history)) {
+              setHistory(merged.history);
+              localStorage.setItem('vxq_history', JSON.stringify(merged.history));
+            }
 
             // --- 2. PUSH FULLY UNIFIED UNION STATE TO THE SHEET ---
             const finalPayload = {
@@ -937,7 +988,8 @@ export default function App() {
                 students: merged.students,
                 tuitionPayments: merged.payments,
                 bankTransfers: merged.bankTransfers,
-                announcements: merged.announcements
+                announcements: merged.announcements,
+                history: merged.history
               }
             };
 
@@ -963,7 +1015,8 @@ export default function App() {
                 students: merged.students,
                 tuitionPayments: merged.payments,
                 bankTransfers: merged.bankTransfers,
-                announcements: merged.announcements
+                announcements: merged.announcements,
+                history: merged.history
               });
               setTimeout(() => {
                 setIsPushingState(prev => prev === 'success' ? 'idle' : prev);
@@ -987,7 +1040,7 @@ export default function App() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [students, payments, bankTransfers, announcements, users, isInitialLoadDone, config.googleScriptsUrl, deletedTransferIds, deletedAnnouncementIds]);
+  }, [students, payments, bankTransfers, announcements, users, history, isInitialLoadDone, config.googleScriptsUrl, deletedTransferIds, deletedAnnouncementIds]);
 
   // Redirect protection for unauthorized or non-admin users
   useEffect(() => {
@@ -1118,7 +1171,101 @@ export default function App() {
 
   // Helper: Log audit trail to the system
   const appendAuditLog = (type: any, id: string, action: any, oldValue: string, newValue: string) => {
-    // Audit logs disabled per user request
+    let content = '';
+
+    const extractNameOrId = (jsonStr: string, fallback: string) => {
+      try {
+        const obj = JSON.parse(jsonStr);
+        return obj.fullName || obj.className || obj.title || obj.name || fallback;
+      } catch (e) {
+        return fallback;
+      }
+    };
+
+    if (type === 'STUDENT') {
+      const studentName = extractNameOrId(newValue || oldValue, id);
+      if (action === 'CREATE') {
+        content = `Thêm mới học viên ${studentName} (Mã số: ${id})`;
+      } else if (action === 'UPDATE') {
+        if (newValue.includes('ARCHIVED') || newValue.includes('Archived')) {
+          content = `Lưu trữ học viên ${studentName}`;
+        } else {
+          content = `Cập nhật thông tin học viên ${studentName}`;
+        }
+      }
+    } else if (type === 'TUITION') {
+      const studentName = students.find(s => s.studentId === id)?.fullName || id;
+      if (newValue.includes('UNPAID') || newValue.includes('Unpaid')) {
+        content = `Hủy xác nhận thu học phí của học viên ${studentName}`;
+      } else {
+        content = `Đóng học phí cho học viên ${studentName}: ${newValue}`;
+      }
+    } else if (type === 'ANNOUNCEMENT') {
+      const title = extractNameOrId(newValue || oldValue, 'bài viết');
+      if (action === 'CREATE') {
+        content = `Đăng thông báo/bài viết mới: "${title}"`;
+      } else if (action === 'UPDATE') {
+        content = `Cập nhật nội dung thông báo/bài viết: "${title}"`;
+      } else if (action === 'DELETE') {
+        content = `Xóa bài thông báo/bài viết: "${title}"`;
+      }
+    } else if (type === 'TRANSFER') {
+      if (action === 'CREATE') {
+        content = `Chi lương / Chuyển khoản cho giáo viên: ${newValue}`;
+      } else if (action === 'UPDATE') {
+        content = `Cập nhật thông tin chuyển khoản: ${newValue}`;
+      } else if (action === 'DELETE') {
+        content = `Xóa bản ghi chuyển khoản giáo viên: ${oldValue}`;
+      }
+    } else if (type === 'CLASS') {
+      const className = extractNameOrId(newValue || oldValue, id);
+      if (action === 'CREATE') {
+        content = `Tạo lớp võ thuật mới: ${className}`;
+      } else if (action === 'UPDATE') {
+        if (newValue.includes('ARCHIVED') || newValue.includes('Archived')) {
+          content = `Lưu trữ lớp võ thuật: ${className}`;
+        } else {
+          content = `Cập nhật lớp võ thuật: ${className}`;
+        }
+      }
+    } else if (type === 'CONFIGURATION') {
+      content = `Cập nhật cấu hình hệ thống: đổi tên trung tâm, số tài khoản hoặc thông tin liên hệ`;
+    } else if (type === 'AUTH') {
+      if (action === 'LOGIN') {
+        content = `Đăng nhập thành công vào hệ thống`;
+      } else if (action === 'LOGOUT') {
+        content = `Đăng xuất khỏi hệ thống`;
+      } else if (action === 'UPDATE') {
+        content = `Thay đổi mật khẩu tài khoản thành công`;
+      }
+    }
+
+    if (!content) {
+      if (newValue && !newValue.startsWith('{')) {
+        content = `${action} ${type}: ${newValue}`;
+      } else {
+        content = `${action} ${type} (${id})`;
+      }
+    }
+
+    // Capture User name safely
+    const currentUserName = currentUser ? (currentUser.fullName || currentUser.username) : 'Hệ thống';
+
+    // Build ISO timestamp locally
+    const timestampStr = new Date().toISOString();
+    const formattedDate = timestampStr.replace('T', ' ').replace('Z', '').substring(0, 19);
+
+    const newRecord: HistoryRecord = {
+      date: formattedDate,
+      user: currentUserName,
+      content: content
+    };
+
+    setHistory(prev => {
+      const updated = [newRecord, ...prev];
+      localStorage.setItem('vxq_history', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   // -------------------------------------------------------------
@@ -1680,24 +1827,57 @@ export default function App() {
       const matchStatus = s.activeStatus === statusFilterStudent;
       return matchSearch && matchStatus;
     }).map(s => {
+      const matchingClass = classes.find(c => c.classId === s.classId);
       return {
         'Mã định danh': s.studentId,
         'Họ và tên': s.fullName,
+        'Biệt danh/Gọi tên': s.nickname || '',
+        'Ngày sinh': s.dateOfBirth || '',
+        'Giới tính': s.gender === 'Male' ? 'Nam' : s.gender === 'Female' ? 'Nữ' : 'Khác',
         'Cấp đai': s.beltRank || 'Đai Trắng',
-        'Gọi tên': s.nickname || '',
-        'SĐT học viên': s.phone || '',
         'Tên phụ huynh': s.parentName,
-        'SĐT Phụ huynh': s.parentPhone,
-        'Địa chỉ': s.address,
+        'SĐT phụ huynh': s.parentPhone,
+        'SĐT võ sinh': s.phone || '',
+        'Địa chỉ': s.address || '',
+        'Email': s.email || '',
+        'Mã lớp': s.classId || '',
+        'Tên lớp': matchingClass ? matchingClass.className : '',
         'Học phí mỗi tháng': s.tuitionFee,
-        'Ngày ghi danh': s.enrollmentDate,
-        'Trạng thái': s.activeStatus
+        'Miễn giảm/Giảm giá': s.discount || 0,
+        'Ghi chú': s.note || '',
+        'Trạng thái': s.activeStatus === 'Active' ? 'Đang học' : s.activeStatus === 'Inactive' ? 'Nghỉ học' : 'Lưu trữ (Archived)',
+        'Ngày ghi danh': s.enrollmentDate || '',
+        'Ngày nghỉ học': s.leaveDate || '',
+        'Ngày tạo': s.createdAt || '',
+        'Ngày cập nhật': s.updatedAt || ''
       };
     });
 
     exportToCSV(
       dataToExport,
-      ['Mã định danh', 'Họ và tên', 'Cấp đai', 'Gọi tên', 'SĐT học viên', 'Tên phụ huynh', 'SĐT Phụ huynh', 'Địa chỉ', 'Học phí mỗi tháng', 'Ngày ghi danh', 'Trạng thái'],
+      [
+        'Mã định danh',
+        'Họ và tên',
+        'Biệt danh/Gọi tên',
+        'Ngày sinh',
+        'Giới tính',
+        'Cấp đai',
+        'Tên phụ huynh',
+        'SĐT phụ huynh',
+        'SĐT võ sinh',
+        'Địa chỉ',
+        'Email',
+        'Mã lớp',
+        'Tên lớp',
+        'Học phí mỗi tháng',
+        'Miễn giảm/Giảm giá',
+        'Ghi chú',
+        'Trạng thái',
+        'Ngày ghi danh',
+        'Ngày nghỉ học',
+        'Ngày tạo',
+        'Ngày cập nhật'
+      ],
       buildFilename('danh_sach_hoc_sinh', 'csv')
     );
     appendAuditLog('EXPORT', 'STUDENTS', 'EXPORT', '', 'Xuất danh sách học viên chọn lọc ra tập tin CSV thành công.');
@@ -1864,6 +2044,9 @@ export default function App() {
             ...(isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN') ? [
               { id: 'bank_transfers', label: 'Chuyển Khoản', icon: Landmark },
               { id: 'config', label: 'Cấu Hình', icon: Settings }
+            ] : []),
+            ...(isLoggedIn && currentUser.role === 'SUPER_ADMIN' ? [
+              { id: 'history', label: 'Lịch Sử Hoạt Động', icon: History }
             ] : [])
           ].map(item => {
             const Icon = item.icon;
@@ -3555,6 +3738,10 @@ export default function App() {
                   announcements={announcements}
                   onSyncImport={handleSyncImport}
                 />
+              )}
+
+              {activeTab === 'history' && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SUPPER_ADMIN') && (
+                <HistoryView historyRecords={history} />
               )}
 
             </motion.div>

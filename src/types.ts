@@ -137,3 +137,9 @@ export interface AppConfig {
   googleScriptsUrl?: string;
   googleScriptsId?: string;
 }
+
+export interface HistoryRecord {
+  date: string;
+  user: string;
+  content: string;
+}
