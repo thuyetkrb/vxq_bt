@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Pin, Trash2, Megaphone, Edit3, Plus, Calendar, PinOff, CheckCircle, ShieldAlert, X, Newspaper } from 'lucide-react';
+import { Pin, Trash2, Megaphone, Edit3, Plus, Calendar, PinOff, CheckCircle, ShieldAlert, X, Newspaper, Share2 } from 'lucide-react';
 import { Announcement, UserRole } from '../types';
 import { motion } from 'motion/react';
 
@@ -16,6 +16,8 @@ interface AnnouncementSectionProps {
   onUpdateAnnouncement: (annId: string, updated: Partial<Announcement>) => void;
   onDeleteAnnouncement: (annId: string) => void;
   forceType?: 'internal' | 'news';
+  targetAnnId?: string | null;
+  onSelectAnnouncement?: (annId: string | null) => void;
 }
 
 export default function AnnouncementSection({
@@ -25,17 +27,24 @@ export default function AnnouncementSection({
   onAddAnnouncement,
   onUpdateAnnouncement,
   onDeleteAnnouncement,
-  forceType
+  forceType,
+  targetAnnId,
+  onSelectAnnouncement
 }: AnnouncementSectionProps) {
   const [activeSubTab, setActiveSubTab] = useState<'internal' | 'news'>(forceType || 'internal');
   const [expandedAnnIds, setExpandedAnnIds] = useState<Record<string, boolean>>({});
 
   const toggleExpandAnn = (id: string) => {
+    const nextVal = !expandedAnnIds[id];
     setExpandedAnnIds(prev => ({
       ...prev,
-      [id]: !prev[id]
+      [id]: nextVal
     }));
+    if (onSelectAnnouncement) {
+      onSelectAnnouncement(nextVal ? id : null);
+    }
   };
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -44,6 +53,24 @@ export default function AnnouncementSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Synchronize expandedAnnIds on mount or when targetAnnId changes
+  React.useEffect(() => {
+    if (targetAnnId) {
+      setExpandedAnnIds(prev => ({
+        ...prev,
+        [targetAnnId]: true
+      }));
+      // Smooth scroll to the direct-linked element
+      setTimeout(() => {
+        const el = document.getElementById(`ann-card-${targetAnnId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+    }
+  }, [targetAnnId]);
 
   // Sychronize activeSubTab with forceType if it changes
   React.useEffect(() => {
@@ -144,6 +171,27 @@ export default function AnnouncementSection({
     onUpdateAnnouncement(ann.announcementId, { pinned: !ann.pinned });
     setSuccess(`Đã ${!ann.pinned ? 'Ghim' : 'Bỏ Ghim'} thành công!`);
     setTimeout(() => setSuccess(''), 3000);
+  };
+
+  const handleCopyLink = (ann: Announcement) => {
+    const prefix = ann.type === 'news' ? 'tin-tuc' : 'noi-bo';
+    const link = `${window.location.origin}/${prefix}/${ann.announcementId}`;
+    
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => {
+        setSuccess('Đã sao chép liên kết bài đăng vào bộ nhớ tạm!');
+        setCopiedId(ann.announcementId);
+        setTimeout(() => {
+          setCopiedId(null);
+          setSuccess('');
+        }, 3000);
+      }).catch(err => {
+        console.error('Failed to copy', err);
+        setError('Không thể tự động sao chép liên kết.');
+      });
+    } else {
+      setError(`Sao chép liên kết thủ công: ${link}`);
+    }
   };
 
   const internalCount = announcements.filter(a => !a.type || a.type === 'internal').length;
@@ -362,7 +410,10 @@ export default function AnnouncementSection({
           sortedAnnouncements.map((ann) => (
             <div
               key={ann.announcementId}
-              className={`rounded-xl border border-gray-100 bg-white p-5 shadow-3xs relative overflow-hidden transition-all hover:border-emerald-200 hover:shadow-xs ${ann.pinned ? 'border-l-4 border-l-emerald-500 bg-emerald-50/5' : ''}`}
+              id={`ann-card-${ann.announcementId}`}
+              className={`rounded-xl border border-gray-100 bg-white p-5 shadow-3xs relative overflow-hidden transition-all duration-300 hover:border-emerald-200 hover:shadow-xs 
+                ${ann.pinned ? 'border-l-4 border-l-emerald-500 bg-emerald-50/5' : ''} 
+                ${ann.announcementId === targetAnnId ? 'ring-2 ring-emerald-500 bg-emerald-50/20 scale-[1.01] shadow-md border-emerald-300/40' : ''}`}
             >
               {ann.pinned && (
                 <div className="absolute top-4 right-4 flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-wide">
@@ -372,7 +423,13 @@ export default function AnnouncementSection({
               )}
 
               <div className="flex flex-col gap-1.5 pr-20 md:pr-24">
-                <h3 className="text-sm font-extrabold text-gray-900 leading-snug">{ann.title}</h3>
+                <h3 
+                  onClick={() => toggleExpandAnn(ann.announcementId)}
+                  className="text-sm font-extrabold text-gray-900 leading-snug cursor-pointer hover:text-emerald-700 transition-colors"
+                  title="Bấm để xem chi tiết & lấy đường dẫn"
+                >
+                  {ann.title}
+                </h3>
                 
                 {/* Meta details row */}
                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 font-medium">
@@ -424,34 +481,42 @@ export default function AnnouncementSection({
                 })()}
               </div>
 
-              {/* Action permissions controls */}
-              {canWrite && (
-                <div className="flex items-center justify-end gap-2 border-t border-gray-50/50 pt-3 mt-4 text-[11px] select-none">
-                  <button
-                    onClick={() => handleTogglePin(ann)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-emerald-700 font-bold cursor-pointer"
-                  >
-                    {ann.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
-                    {ann.pinned ? 'Bỏ ghim' : 'Ghim'}
-                  </button>
-                  <span className="text-gray-200">|</span>
-                  <button
-                    onClick={() => handleEditClick(ann)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-amber-700 font-bold cursor-pointer"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                    Sửa
-                  </button>
-                  <span className="text-gray-200">|</span>
-                  <button
-                    onClick={() => handleDelete(ann.announcementId)}
-                    className="flex items-center gap-1 text-gray-400 hover:text-rose-700 font-bold cursor-pointer"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Xóa
-                  </button>
-                </div>
-              )}
+              {/* Action and sharing footer controls */}
+              <div className="flex items-center justify-between border-t border-gray-100/50 pt-3 mt-4 text-[11px] select-none">
+                <button
+                  type="button"
+                  onClick={() => handleCopyLink(ann)}
+                  className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer transition-colors py-0.5"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  {copiedId === ann.announcementId ? 'Đã sao chép!' : 'Sao chép liên kết'}
+                </button>
+
+                {canWrite && (
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={() => handleTogglePin(ann)}
+                      className="flex items-center gap-1 text-gray-400 hover:text-emerald-700 font-bold cursor-pointer"
+                    >
+                      {ann.pinned ? 'Bỏ ghim' : 'Ghim'}
+                    </button>
+                    <span className="text-gray-200">|</span>
+                    <button
+                      onClick={() => handleEditClick(ann)}
+                      className="flex items-center gap-1 text-gray-400 hover:text-amber-700 font-bold cursor-pointer"
+                    >
+                      Sửa
+                    </button>
+                    <span className="text-gray-200">|</span>
+                    <button
+                      onClick={() => handleDelete(ann.announcementId)}
+                      className="flex items-center gap-1 text-gray-400 hover:text-rose-700 font-bold cursor-pointer"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))
         )}

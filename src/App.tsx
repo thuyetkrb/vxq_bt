@@ -126,14 +126,115 @@ import ConfigSettings from './components/ConfigSettings';
 import BankTransferView from './components/BankTransferView';
 import HistoryView from './components/HistoryView';
 
+const TAB_PATH_MAP: Record<string, string> = {
+  'dashboard': 'tong-quan',
+  'tuition': 'hoc-phi',
+  'students': 'vo-sinh',
+  'news': 'tin-tuc',
+  'announcements': 'noi-bo',
+  'bank_transfers': 'chuyen-khoan',
+  'config': 'cau-hinh',
+  'history': 'lich-su'
+};
+
+const PATH_TAB_MAP: Record<string, string> = {
+  '': 'dashboard',
+  'tong-quan': 'dashboard',
+  'dashboard': 'dashboard',
+  'hoc-phi': 'tuition',
+  'tuition': 'tuition',
+  'vo-sinh': 'students',
+  'students': 'students',
+  'tin-tuc': 'news',
+  'news': 'news',
+  'noi-bo': 'announcements',
+  'announcements': 'announcements',
+  'chuyen-khoan': 'bank_transfers',
+  'bank_transfers': 'bank_transfers',
+  'cau-hinh': 'config',
+  'config': 'config',
+  'lich-su': 'history',
+  'history': 'history'
+};
+
 export default function App() {
   // Mobile Navigation Drawer Toggle
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Routing helper
+  const getRouteFromUrl = () => {
+    let routeStr = window.location.hash.replace(/^#\/?/, '').trim();
+    if (!routeStr) {
+      routeStr = window.location.pathname.replace(/^\//, '').trim();
+    }
+    if (!routeStr) {
+      return { tab: 'dashboard' as const, targetId: null };
+    }
+    const parts = routeStr.split('/');
+    const prefix = parts[0];
+    const targetId = parts[1] || null;
+
+    const matchedTab = PATH_TAB_MAP[prefix] || 'dashboard';
+    return {
+      tab: matchedTab as 'dashboard' | 'students' | 'tuition' | 'news' | 'announcements' | 'config' | 'bank_transfers' | 'history',
+      targetId
+    };
+  };
   
   // Active Sidebar Tab Tracker
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'students' | 'tuition' | 'news' | 'announcements' | 'config' | 'bank_transfers' | 'history'
-  >('dashboard');
+  >(() => {
+    const { tab } = getRouteFromUrl();
+    return tab;
+  });
+
+  const [targetAnnId, setTargetAnnId] = useState<string | null>(() => {
+    const { targetId } = getRouteFromUrl();
+    return targetId;
+  });
+
+  const isSyncingFromUrlRef = useRef(false);
+
+  // Sync state when URL gets modified (e.g., Back/Forward button clicks, deep-linking)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const { tab, targetId } = getRouteFromUrl();
+      isSyncingFromUrlRef.current = true;
+      setActiveTab(tab);
+      setTargetAnnId(targetId);
+      isSyncingFromUrlRef.current = false;
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
+  // Update URL whenever activeTab or targetAnnId changes reactively
+  useEffect(() => {
+    if (isSyncingFromUrlRef.current) return;
+
+    const slug = activeTab === 'dashboard' ? '' : (TAB_PATH_MAP[activeTab] || activeTab);
+    let targetPath = slug ? `/${slug}` : '/';
+    if (targetAnnId) {
+      targetPath += (slug ? '/' : '') + targetAnnId;
+    }
+
+    const currentSlug = window.location.hash.replace(/^#\/?/, '') || window.location.pathname.replace(/^\//, '');
+    const targetSlugWithoutSlash = `${slug}${targetAnnId ? (slug ? '/' : '') + targetAnnId : ''}`;
+
+    if (currentSlug !== targetSlugWithoutSlash) {
+      if (window.location.hash.startsWith('#')) {
+        window.history.pushState(null, '', `#/${targetSlugWithoutSlash}`);
+      } else {
+        window.history.pushState(null, '', targetPath);
+      }
+    }
+  }, [activeTab, targetAnnId]);
 
   // Accounts list state with Local Storage persistence
   const [users, setUsers] = useState<User[]>(() => {
@@ -2012,7 +2113,13 @@ export default function App() {
       
       {/* ----------------- MOBILE TOPBAR ----------------- */}
       <header className="md:hidden flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2 sticky top-0 z-40 no-print">
-        <div className="flex items-center gap-2">
+        <div 
+          onClick={() => {
+            setActiveTab('dashboard');
+            setTargetAnnId(null);
+          }}
+          className="flex items-center gap-2 cursor-pointer select-none"
+        >
           <span className="w-8 h-8 rounded-full overflow-hidden border border-emerald-205 bg-white flex items-center justify-center shadow-3xs">
             <img src={kungfuLogo} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
@@ -2033,12 +2140,19 @@ export default function App() {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Brand Banner */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-emerald-50/60 bg-emerald-50/10">
-          <span className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-emerald-200 bg-[#f0fdf4] shadow-xs select-none">
+        <div 
+          onClick={() => {
+            setActiveTab('dashboard');
+            setTargetAnnId(null);
+            setIsMobileMenuOpen(false);
+          }}
+          className="flex items-center gap-3 px-6 py-5 border-b border-emerald-50/60 bg-emerald-50/10 cursor-pointer hover:bg-emerald-50/40 transition-colors select-none"
+        >
+          <span className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center border border-emerald-200 bg-[#f0fdf4] shadow-xs">
             <img src={kungfuLogo} alt="Logo Kungfu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </span>
           <div>
-            <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block">VXQ BÌNH TÂN</span>
+            <span className="font-display font-extrabold text-emerald-950 tracking-tight text-base block animate-pulse">VXQ BÌNH TÂN</span>
             <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest font-mono leading-none block mt-1">Võ Quán Nam Anh Quang</span>
           </div>
         </div>
@@ -3699,6 +3813,8 @@ export default function App() {
                   onUpdateAnnouncement={handleUpdateAnnouncement}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
                   forceType="news"
+                  targetAnnId={targetAnnId}
+                  onSelectAnnouncement={setTargetAnnId}
                 />
               )}
 
@@ -3714,6 +3830,8 @@ export default function App() {
                   onUpdateAnnouncement={handleUpdateAnnouncement}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
                   forceType="internal"
+                  targetAnnId={targetAnnId}
+                  onSelectAnnouncement={setTargetAnnId}
                 />
               )}
 
