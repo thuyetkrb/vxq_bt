@@ -538,6 +538,27 @@ export default function App() {
       return isNaN(t) ? 0 : t;
     };
 
+    const isLocalNewer = (
+      localUpdated: string | undefined,
+      localCreated: string | undefined,
+      remoteUpdated: string | undefined,
+      remoteCreated: string | undefined
+    ) => {
+      const localTime = Math.max(getTime(localUpdated), getTime(localCreated));
+      const remoteTime = Math.max(getTime(remoteUpdated), getTime(remoteCreated));
+      
+      const localHasPrecision = (localUpdated && localUpdated.length > 10) || (localCreated && localCreated.length > 10);
+      const remoteHasPrecision = (remoteUpdated && remoteUpdated.length > 10) || (remoteCreated && remoteCreated.length > 10);
+
+      if (localHasPrecision && !remoteHasPrecision) {
+        if (Math.abs(localTime - remoteTime) < 30 * 60 * 60 * 1000) {
+          return true; // Keep local
+        }
+      }
+
+      return localTime >= remoteTime;
+    };
+
     // --- 1. MERGE STUDENTS ---
     let parsedRemoteStudents: Student[] = [];
     if (remoteData.students && Array.isArray(remoteData.students)) {
@@ -578,9 +599,7 @@ export default function App() {
       if (!existing) {
         mergedStudentsMap.set(s.studentId, s);
       } else {
-        const localTime = Math.max(getTime(s.updatedAt), getTime(s.createdAt));
-        const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-        if (localTime >= remoteTime) {
+        if (isLocalNewer(s.updatedAt, s.createdAt, existing.updatedAt, existing.createdAt)) {
           mergedStudentsMap.set(s.studentId, s);
         }
       }
@@ -622,9 +641,7 @@ export default function App() {
         if (!existing) {
           mergedPaymentsMap.set(p.paymentId, p);
         } else {
-          const localTime = Math.max(getTime(p.updatedAt), getTime(p.createdAt));
-          const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-          if (localTime >= remoteTime) {
+          if (isLocalNewer(p.updatedAt, p.createdAt, existing.updatedAt, existing.createdAt)) {
             mergedPaymentsMap.set(p.paymentId, p);
           }
         }
@@ -668,9 +685,7 @@ export default function App() {
         if (!existing) {
           mergedTransfersMap.set(b.transferId, b);
         } else {
-          const localTime = getTime(b.createdAt);
-          const remoteTime = getTime(existing.createdAt);
-          if (localTime >= remoteTime) {
+          if (isLocalNewer(undefined, b.createdAt, undefined, existing.createdAt)) {
             mergedTransfersMap.set(b.transferId, b);
           }
         }
@@ -713,9 +728,7 @@ export default function App() {
         if (!existing) {
           mergedAnnouncementsMap.set(a.announcementId, a);
         } else {
-          const localTime = Math.max(getTime(a.updatedAt), getTime(a.createdAt));
-          const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-          if (localTime >= remoteTime) {
+          if (isLocalNewer(a.updatedAt, a.createdAt, existing.updatedAt, existing.createdAt)) {
             mergedAnnouncementsMap.set(a.announcementId, a);
           }
         }
@@ -1464,7 +1477,7 @@ export default function App() {
               parentPhone: parentPhoneVal,
               address: addressVal,
               email: emailVal,
-              classId: classIdVal,
+              classId: s.classId || classIdVal,
               tuitionFee: actualFee,
               discount: discountVal,
               note: noteVal,

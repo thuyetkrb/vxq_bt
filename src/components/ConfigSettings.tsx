@@ -179,7 +179,12 @@ function readSheetData(sheetName) {
     for (var j = 0; j < headers.length; j++) {
       var cellVal = rows[i][j];
       if (cellVal instanceof Date) {
-        cellVal = cellVal.toISOString().substring(0, 10);
+        var headerName = String(headers[j] || "");
+        if (headerName === "updatedAt" || headerName === "createdAt" || headerName.endsWith("At")) {
+          cellVal = cellVal.toISOString(); // Keep full UTC date-time precision
+        } else {
+          cellVal = cellVal.toISOString().substring(0, 10);
+        }
       }
       obj[headers[j]] = cellVal;
     }
