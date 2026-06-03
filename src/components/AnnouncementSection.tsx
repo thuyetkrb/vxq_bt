@@ -28,6 +28,14 @@ export default function AnnouncementSection({
   forceType
 }: AnnouncementSectionProps) {
   const [activeSubTab, setActiveSubTab] = useState<'internal' | 'news'>(forceType || 'internal');
+  const [expandedAnnIds, setExpandedAnnIds] = useState<Record<string, boolean>>({});
+
+  const toggleExpandAnn = (id: string) => {
+    setExpandedAnnIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -378,8 +386,42 @@ export default function AnnouncementSection({
               </div>
 
               {/* Body Content */}
-              <div className="mt-3.5 text-xs text-gray-600 leading-relaxed whitespace-pre-line">
-                {ann.content}
+              <div className="mt-3.5 text-xs text-gray-650 leading-relaxed whitespace-pre-line">
+                {(() => {
+                  const bodyText = ann.content || '';
+                  const isExpanded = !!expandedAnnIds[ann.announcementId];
+                  const limit = 250;
+                  if (bodyText.length <= limit) {
+                    return bodyText;
+                  }
+                  if (isExpanded) {
+                    return (
+                      <div>
+                        {bodyText}
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandAnn(ann.announcementId)}
+                          className="mt-1.5 font-bold text-emerald-700 hover:text-emerald-950 inline-block cursor-pointer bg-transparent border-none p-0 focus:outline-none focus:ring-0"
+                        >
+                          Thu gọn ↑
+                        </button>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div>
+                        {bodyText.substring(0, limit)}...
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandAnn(ann.announcementId)}
+                          className="mt-1.5 font-bold text-emerald-700 hover:text-emerald-950 inline-block cursor-pointer bg-transparent border-none p-0 focus:outline-none focus:ring-0"
+                        >
+                          Xem thêm ↓
+                        </button>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
 
               {/* Action permissions controls */}

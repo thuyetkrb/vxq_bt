@@ -521,3 +521,66 @@ export async function exportElementToPDF(elementId: string, filename: string, la
   }
 }
 
+/**
+ * Calculates how long a student has studied based on enrollmentDate and leaveDate (or current date)
+ * Returns a Vietnamese text description like "1 năm 2 tháng" or "15 ngày"
+ */
+export function calculateStudyDuration(enrollmentDate: string, leaveDate?: string): string {
+  if (!enrollmentDate) return 'Chưa rõ';
+  
+  const start = new Date(enrollmentDate);
+  if (isNaN(start.getTime())) return 'Chưa rõ';
+  
+  const end = leaveDate ? new Date(leaveDate) : new Date();
+  if (isNaN(end.getTime()) || end < start) return '0 ngày';
+  
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+  
+  if (days < 0) {
+    months--;
+    const prevMonth = new Date(end.getFullYear(), end.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  const parts: string[] = [];
+  if (years > 0) {
+    parts.push(`${years} năm`);
+  }
+  if (months > 0) {
+    parts.push(`${months} tháng`);
+  }
+  if (years === 0 && months === 0) {
+    parts.push(`${days} ngày`);
+  } else if (days > 0 && years === 0) {
+    parts.push(`${days} ngày`);
+  }
+  
+  return parts.join(' ') || '0 ngày';
+}
+
+/**
+ * Calculates study duration as a decimal number of years, e.g. "1.2 năm" or "0.2 năm"
+ */
+export function calculateStudyDurationYears(enrollmentDate: string, leaveDate?: string): string {
+  if (!enrollmentDate) return '0 năm';
+  
+  const start = new Date(enrollmentDate);
+  if (isNaN(start.getTime())) return '0 năm';
+  
+  const end = leaveDate ? new Date(leaveDate) : new Date();
+  if (isNaN(end.getTime()) || end < start) return '0 năm';
+  
+  const diffTime = end.getTime() - start.getTime();
+  const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
+  
+  return `${diffYears.toFixed(1)} năm`;
+}
+
+

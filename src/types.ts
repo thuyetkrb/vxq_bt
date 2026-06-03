@@ -32,6 +32,7 @@ export interface Student {
   nickname?: string;
   dateOfBirth: string;
   gender: 'Male' | 'Female' | 'Other';
+  beltRank?: string;
   parentName: string;
   parentPhone: string;
   phone?: string;
@@ -43,6 +44,7 @@ export interface Student {
   note: string;
   activeStatus: 'Active' | 'Inactive' | 'Archived';
   enrollmentDate: string;
+  leaveDate?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -72,7 +72,7 @@ import {
   INITIAL_BANK_TRANSFERS
 } from './initialData';
 
-import { formatVND, exportToCSV, getMonthName, buildFilename, normalizeDateToLocalYMD } from './utils';
+import { formatVND, exportToCSV, getMonthName, buildFilename, normalizeDateToLocalYMD, calculateStudyDuration, calculateStudyDurationYears } from './utils';
 // @ts-ignore
 import kungfuLogo from './assets/images/kungfu_logo_1780331143142.png';
 
@@ -239,6 +239,44 @@ export default function App() {
   const [deletedAnnouncementIds, setDeletedAnnouncementIds] = useState<string[]>(() => {
     return JSON.parse(localStorage.getItem('mec_deleted_announcements') || '[]');
   });
+
+  // Helper to determine student status in a specific month/year
+  const getStudentStatusInMonth = (st: Student, m: number, y: number): 'Active' | 'Inactive' | 'Archived' | 'NotJoined' | 'Left' => {
+    if (st.enrollmentDate) {
+      const parts = st.enrollmentDate.split('-');
+      if (parts.length >= 2) {
+        const enrollY = parseInt(parts[0], 10);
+        const enrollM = parseInt(parts[1], 10);
+        if (!isNaN(enrollY) && !isNaN(enrollM)) {
+          if (y < enrollY || (y === enrollY && m < enrollM)) {
+            return 'NotJoined';
+          }
+        }
+      }
+    }
+
+    if (st.leaveDate) {
+      const parts = st.leaveDate.split('-');
+      if (parts.length >= 2) {
+        const leaveY = parseInt(parts[0], 10);
+        const leaveM = parseInt(parts[1], 10);
+        if (!isNaN(leaveY) && !isNaN(leaveM)) {
+          if (y > leaveY || (y === leaveY && m > leaveM)) {
+            return 'Left';
+          }
+        }
+      }
+    }
+
+    if (st.activeStatus === 'Inactive') {
+      return 'Inactive';
+    }
+    if (st.activeStatus === 'Archived') {
+      return 'Archived';
+    }
+
+    return 'Active';
+  };
 
   // Database connectivity health states
   const [dbHealth, setDbHealth] = useState<'checking' | 'connected' | 'error' | 'noconfig'>('checking');
@@ -1095,8 +1133,9 @@ export default function App() {
     const freshPayments = [...payments];
 
     students.forEach(std => {
-      // Only bill Active students
-      if (std.activeStatus !== 'Active') return;
+      // Determine status in this month/year dynamically (handles enrollment and leave dates)
+      const statusInMonth = getStudentStatusInMonth(std, currentMonth, currentYear);
+      if (statusInMonth !== 'Active') return;
 
       const hasBill = freshPayments.some(
         pay => pay.studentId === std.studentId && pay.month === currentMonth && pay.year === currentYear
@@ -1239,6 +1278,7 @@ export default function App() {
     const formData = new FormData(e.currentTarget);
     const fullNameVal = formData.get('fullName') as string;
     const nicknameVal = formData.get('nickname') as string;
+    const beltRankVal = (formData.get('beltRank') as string) || 'Đai Trắng';
     const dobVal = formData.get('dateOfBirth') as string;
     const genderVal = formData.get('gender') as Student['gender'];
     const phoneVal = (formData.get('phone') as string) || '';
@@ -1251,6 +1291,9 @@ export default function App() {
     const discountVal = 0;
     const noteVal = formData.get('note') as string;
     const statusVal = formData.get('activeStatus') as Student['activeStatus'];
+    const enrollmentDateVal = (formData.get('enrollmentDate') as string) || (editingStudent?.enrollmentDate || new Date().toISOString().substring(0, 10));
+    const leaveDateValStr = formData.get('leaveDate') as string;
+    const leaveDateVal = leaveDateValStr && leaveDateValStr.trim() !== '' ? leaveDateValStr : undefined;
 
     const actualFee = tuitionFeeVal;
 
@@ -1263,6 +1306,7 @@ export default function App() {
               ...s,
               fullName: fullNameVal,
               nickname: nicknameVal,
+              beltRank: beltRankVal,
               dateOfBirth: dobVal,
               gender: genderVal,
               phone: phoneVal,
@@ -1275,6 +1319,8 @@ export default function App() {
               discount: discountVal,
               note: noteVal,
               activeStatus: statusVal,
+              enrollmentDate: enrollmentDateVal,
+              leaveDate: leaveDateVal,
               updatedAt: new Date().toISOString()
             }
           : s
@@ -1291,6 +1337,7 @@ export default function App() {
         studentId: newId,
         fullName: fullNameVal,
         nickname: nicknameVal,
+        beltRank: beltRankVal,
         dateOfBirth: dobVal,
         gender: genderVal,
         phone: phoneVal,
@@ -1303,7 +1350,8 @@ export default function App() {
         discount: discountVal,
         note: noteVal,
         activeStatus: 'Active',
-        enrollmentDate: new Date().toISOString().substring(0, 10),
+        enrollmentDate: enrollmentDateVal,
+        leaveDate: leaveDateVal,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1633,6 +1681,7 @@ export default function App() {
       return {
         'Mã định danh': s.studentId,
         'Họ và tên': s.fullName,
+        'Cấp đai': s.beltRank || 'Đai Trắng',
         'Gọi tên': s.nickname || '',
         'SĐT học viên': s.phone || '',
         'Tên phụ huynh': s.parentName,
@@ -1646,7 +1695,7 @@ export default function App() {
 
     exportToCSV(
       dataToExport,
-      ['Mã định danh', 'Họ và tên', 'Gọi tên', 'SĐT học viên', 'Tên phụ huynh', 'SĐT Phụ huynh', 'Địa chỉ', 'Học phí mỗi tháng', 'Ngày ghi danh', 'Trạng thái'],
+      ['Mã định danh', 'Họ và tên', 'Cấp đai', 'Gọi tên', 'SĐT học viên', 'Tên phụ huynh', 'SĐT Phụ huynh', 'Địa chỉ', 'Học phí mỗi tháng', 'Ngày ghi danh', 'Trạng thái'],
       buildFilename('danh_sach_hoc_sinh', 'csv')
     );
     appendAuditLog('EXPORT', 'STUDENTS', 'EXPORT', '', 'Xuất danh sách học viên chọn lọc ra tập tin CSV thành công.');
@@ -1701,23 +1750,17 @@ export default function App() {
         const isCellPaid = cellPay?.paidStatus === 'Paid';
         const isCellExempt = cellPay?.paidStatus === 'Exempted';
 
-        let hasJoined = true;
-        if (st.enrollmentDate) {
-          const parts = st.enrollmentDate.split('-');
-          if (parts.length >= 2) {
-            const enrollYear = parseInt(parts[0], 10);
-            const enrollMonth = parseInt(parts[1], 10);
-            if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
-              if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
-                hasJoined = false;
-              }
-            }
-          }
-        }
-
+        const statusInMonth = getStudentStatusInMonth(st, item.month, item.year);
         const colHeader = `T.${item.month}/${item.year}`;
-        if (!hasJoined) {
+
+        if (statusInMonth === 'NotJoined') {
           row[colHeader] = 'Chưa tham gia';
+        } else if (statusInMonth === 'Left') {
+          row[colHeader] = 'Đã nghỉ học';
+        } else if (statusInMonth === 'Inactive') {
+          row[colHeader] = 'Tạm nghỉ học';
+        } else if (statusInMonth === 'Archived') {
+          row[colHeader] = 'Đã lưu trữ';
         } else if (isCellExempt) {
           row[colHeader] = 'Miễn học phí' + (cellPay?.note ? ` (${cellPay.note})` : '');
         } else if (isCellPaid) {
@@ -1990,11 +2033,8 @@ export default function App() {
                   <span className="p-1 rounded bg-emerald-50 text-emerald-700">
                     <UserCheck className="h-3.5 w-3.5" />
                   </span>
-                  <div className="text-left px-1.5 py-0.5">
-                    <p className="text-[11px] font-extrabold text-emerald-950 leading-3">{currentUser.fullName}</p>
-                    <span className="text-[9px] text-[#059669] font-bold font-mono uppercase">
-                      {currentUser.role === 'SUPER_ADMIN' ? 'Ban Giám Sát' : currentUser.role === 'ADMIN' ? 'Quản Trị Viên' : currentUser.role === 'STAFF' ? 'Nhân Viên' : 'Người Xem'}
-                    </span>
+                  <div className="text-left px-1.5 py-1">
+                    <p className="text-[11px] font-extrabold text-emerald-950">{currentUser.fullName}</p>
                   </div>
                 </div>
                 
@@ -2156,8 +2196,8 @@ export default function App() {
                     ) : (
                       <div className="bg-white rounded-xl border border-emerald-100 p-5 shadow-2xs">
                         <h2 className="text-base font-extrabold text-emerald-950 uppercase tracking-wide">BÁO CÁO HOẠT ĐỘNG CHUNG</h2>
-                        <p className="text-xs text-emerald-800/80 mt-1">
-                          Chào mừng đến với hệ thống quản lý học phí võ quán. Dưới đây là thống kê sỹ số và chi tiết tình trạng nộp học phí của võ sinh trong <strong>Tháng {currentMonth}/{currentYear}</strong>.
+                        <p className="text-xs text-emerald-800/80 mt-1 font-bold">
+                          Tổng hợp báo cáo Tháng {currentMonth}/{currentYear}
                         </p>
                       </div>
                     )}
@@ -2260,27 +2300,27 @@ export default function App() {
 
                     {/* Compact List of Students by Tuition Status */}
                     {isLoggedIn && (
-                      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-3xs space-y-3 font-sans">
-                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                          <h4 className="text-[11px] font-extrabold text-emerald-950 uppercase tracking-wider flex items-center gap-1">
+                      <div className="bg-white rounded-lg border border-gray-100 p-2.5 shadow-3xs space-y-2 font-sans text-xs">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                          <h4 className="text-[10px] font-extrabold text-emerald-950 uppercase tracking-wider flex items-center gap-1">
                             <span>📋 Chi tiết học phí tháng {currentMonth}</span>
                           </h4>
-                          <span className="text-[9px] text-gray-400 italic font-mono font-bold">Tổng cộng {students.filter(s => s.activeStatus === 'Active').length} võ sinh active</span>
+                          <span className="text-[8.5px] text-gray-400 italic font-mono font-bold">Tổng cộng {students.filter(s => s.activeStatus === 'Active').length} võ sinh active</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                           {/* Miễn phí / Vắng */}
-                          <div className="bg-cyan-50/10 border border-cyan-100/50 rounded-lg p-2.5 space-y-2">
+                          <div className="bg-cyan-50/10 border border-cyan-100/50 rounded-md p-2 space-y-1.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-cyan-900 uppercase tracking-wide flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                              <span className="text-[9.5px] font-bold text-cyan-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-cyan-500"></span>
                                 Miễn phí/ Vắng ({exemptAndFreeCount})
                               </span>
                             </div>
-                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                            <div className="text-[9.5px] text-gray-700 min-h-[28px]">
                               {exemptAndFreeStudents.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {exemptAndFreeStudents.map(s => (
-                                    <span key={s.studentId} className="bg-cyan-50 border border-cyan-100 px-1.5 py-0.5 rounded text-cyan-800 font-bold">
+                                    <span key={s.studentId} className="bg-cyan-50 border border-cyan-100 px-1 py-0.25 rounded text-cyan-850 font-bold">
                                       {s.fullName}
                                     </span>
                                   ))}
@@ -2292,18 +2332,18 @@ export default function App() {
                           </div>
 
                           {/* Đã đóng học phí */}
-                          <div className="bg-emerald-50/10 border border-emerald-100/50 rounded-lg p-2.5 space-y-2">
+                          <div className="bg-emerald-50/10 border border-emerald-100/50 rounded-md p-2 space-y-1.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              <span className="text-[9.5px] font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
                                 Đã đóng học phí ({paidStudents.length})
                               </span>
                             </div>
-                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                            <div className="text-[9.5px] text-gray-700 min-h-[28px]">
                               {paidStudents.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {paidStudents.map(s => (
-                                    <span key={s.studentId} className="bg-[#e0ffd5] border border-[#a2ffa0]/50 px-1.5 py-0.5 rounded text-[#1c640e] font-bold">
+                                    <span key={s.studentId} className="bg-[#e0ffd5] border border-[#a2ffa0]/40 px-1 py-0.25 rounded text-[#1c640e] font-bold">
                                       {s.fullName}
                                     </span>
                                   ))}
@@ -2315,18 +2355,18 @@ export default function App() {
                           </div>
 
                           {/* Còn lại / Chờ thu */}
-                          <div className="bg-rose-50/10 border border-rose-100/50 rounded-lg p-2.5 space-y-2">
+                          <div className="bg-rose-50/10 border border-rose-100/50 rounded-md p-2 space-y-1.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wide flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                              <span className="text-[9.5px] font-bold text-rose-900 uppercase tracking-wide flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-rose-500 animate-pulse"></span>
                                 Còn lại / Chờ thu ({unpaidStudents.length})
                               </span>
                             </div>
-                            <div className="text-[10px] text-gray-700 min-h-[36px]">
+                            <div className="text-[9.5px] text-gray-700 min-h-[28px]">
                               {unpaidStudents.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {unpaidStudents.map(s => (
-                                    <span key={s.studentId} className="bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded text-rose-800 font-bold">
+                                    <span key={s.studentId} className="bg-rose-50 border border-rose-100 px-1 py-0.25 rounded text-rose-850 font-bold">
                                       {s.fullName}
                                     </span>
                                   ))}
@@ -2459,22 +2499,9 @@ export default function App() {
                                         const isCellExempt = cellPay?.paidStatus === 'Exempted';
                                         const isCurrent = item.month === currentMonth && item.year === currentYear;
 
-                                        // Check if student joined yet based on enrollmentDate ("YYYY-MM-DD")
-                                        let hasJoined = true;
-                                        if (st.enrollmentDate) {
-                                          const parts = st.enrollmentDate.split('-');
-                                          if (parts.length >= 2) {
-                                            const enrollYear = parseInt(parts[0], 10);
-                                            const enrollMonth = parseInt(parts[1], 10);
-                                            if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
-                                              if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
-                                                hasJoined = false;
-                                              }
-                                            }
-                                          }
-                                        }
+                                        const statusInMonth = getStudentStatusInMonth(st, item.month, item.year);
 
-                                        if (!hasJoined) {
+                                        if (statusInMonth === 'NotJoined') {
                                           return (
                                             <td 
                                               key={`${st.studentId}-${item.month}-${item.year}`}
@@ -2483,6 +2510,34 @@ export default function App() {
                                               <div className="inline-flex flex-col items-center justify-center p-1 bg-gray-100/60 border border-gray-200/50 text-gray-400 rounded min-w-[80px] w-full text-center">
                                                 <span className="text-[10px] font-bold text-gray-400/80">Trống</span>
                                                 <span className="text-[8px] text-gray-450 font-bold mt-0.5">Chưa tham gia</span>
+                                              </div>
+                                            </td>
+                                          );
+                                        }
+
+                                        if (statusInMonth === 'Left') {
+                                          return (
+                                            <td 
+                                              key={`${st.studentId}-${item.month}-${item.year}`}
+                                              className={`px-2 py-3.5 text-center border-r border-gray-100 bg-red-50/25 select-none text-red-500 ${isCurrent ? 'bg-red-50/10' : ''}`}
+                                            >
+                                              <div className="inline-flex flex-col items-center justify-center p-1 bg-red-50 border border-red-200/50 text-red-600 rounded min-w-[80px] w-full text-center">
+                                                <span className="text-[10px] font-bold text-red-600 font-sans uppercase">Nghỉ học</span>
+                                                <span className="text-[8px] text-red-500 font-bold mt-0.5">Đã dừng học</span>
+                                              </div>
+                                            </td>
+                                          );
+                                        }
+
+                                        if (statusInMonth === 'Inactive' || statusInMonth === 'Archived') {
+                                          return (
+                                            <td 
+                                              key={`${st.studentId}-${item.month}-${item.year}`}
+                                              className={`px-2 py-3.5 text-center border-r border-gray-100 bg-amber-50/15 select-none text-amber-500 ${isCurrent ? 'bg-amber-50/5' : ''}`}
+                                            >
+                                              <div className="inline-flex flex-col items-center justify-center p-1 bg-amber-50 border border-amber-150 text-amber-600 rounded min-w-[80px] w-full text-center">
+                                                <span className="text-[10px] font-bold text-amber-600 uppercase">Tạm dừng</span>
+                                                <span className="text-[8px] text-amber-500 font-bold mt-0.5">{statusInMonth === 'Archived' ? 'Lưu trữ' : 'Tạm dừng'}</span>
                                               </div>
                                             </td>
                                           );
@@ -2551,22 +2606,7 @@ export default function App() {
                                   Tổng học phí theo tháng
                                 </td>
                                 {computedRange.map(item => {
-                                  const colActiveStudents = students.filter(s => {
-                                    if (s.activeStatus !== 'Active') return false;
-                                    if (s.enrollmentDate) {
-                                      const parts = s.enrollmentDate.split('-');
-                                      if (parts.length >= 2) {
-                                        const enrollYear = parseInt(parts[0], 10);
-                                        const enrollMonth = parseInt(parts[1], 10);
-                                        if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
-                                          if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
-                                            return false;
-                                          }
-                                        }
-                                      }
-                                    }
-                                    return true;
-                                  });
+                                  const colActiveStudents = students.filter(s => getStudentStatusInMonth(s, item.month, item.year) === 'Active');
                                   const colTotalTuitionExpected = colActiveStudents.reduce((sum, st) => {
                                     const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                     const isCellExempt = cellPay?.paidStatus === 'Exempted';
@@ -2607,22 +2647,7 @@ export default function App() {
                                   Còn lại
                                 </td>
                                 {computedRange.map(item => {
-                                  const colActiveStudents = students.filter(s => {
-                                    if (s.activeStatus !== 'Active') return false;
-                                    if (s.enrollmentDate) {
-                                      const parts = s.enrollmentDate.split('-');
-                                      if (parts.length >= 2) {
-                                        const enrollYear = parseInt(parts[0], 10);
-                                        const enrollMonth = parseInt(parts[1], 10);
-                                        if (!isNaN(enrollYear) && !isNaN(enrollMonth)) {
-                                          if (item.year < enrollYear || (item.year === enrollYear && item.month < enrollMonth)) {
-                                            return false;
-                                          }
-                                        }
-                                      }
-                                    }
-                                    return true;
-                                  });
+                                  const colActiveStudents = students.filter(s => getStudentStatusInMonth(s, item.month, item.year) === 'Active');
                                   const colTotalTuitionExpected = colActiveStudents.reduce((sum, st) => {
                                     const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                     const isCellExempt = cellPay?.paidStatus === 'Exempted';
@@ -2718,8 +2743,8 @@ export default function App() {
                     </div>
                   </div>
 
-                   {/* Filters and search blocks */}
-                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-gray-100 bg-white p-4 shadow-2xs" data-html2canvas-ignore="true">
+                  {/* Filters and search blocks */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-gray-100 bg-white p-4 shadow-2xs" data-html2canvas-ignore="true">
                     {/* Search student input */}
                     <div className="relative sm:col-span-3">
                       <Search className="absolute top-2.5 left-3 h-4 w-4 text-gray-400" />
@@ -2750,11 +2775,12 @@ export default function App() {
                       <table className="w-full text-xs text-left text-gray-600">
                         <thead className="bg-[#f0f9f3] text-[10px] uppercase font-bold text-[#14532d] border-b border-gray-100">
                           <tr>
-                            <th className="px-4 py-3">Danh xưng ID</th>
-                            <th className="px-4 py-3">Họ và Tên Võ Sinh</th>
-                            <th className="px-4 py-3">Phụ huynh & SĐT</th>
+                            <th className="px-4 py-3">ID</th>
+                            <th className="px-4 py-3">Họ và Tên</th>
+                            <th className="px-4 py-3">Đai Đẳng</th>
                             <th className="px-4 py-3">Học phí mỗi tháng</th>
                             <th className="px-4 py-3">Ngày nhập học</th>
+                            <th className="px-4 py-3">Thời gian học</th>
                             <th className="px-4 py-3" data-html2canvas-ignore="true">Hành động</th>
                           </tr>
                         </thead>
@@ -2767,7 +2793,7 @@ export default function App() {
                             return matchSearch && matchStatus;
                           }).length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                              <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                                 Không tìm thấy hồ sơ võ sinh nào khớp với tiêu chuẩn đề ra.
                               </td>
                             </tr>
@@ -2788,11 +2814,17 @@ export default function App() {
                                       <p className="font-bold text-gray-950 text-xs">{st.fullName}</p>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <p className="font-semibold text-gray-700">{st.parentName}</p>
-                                      <span className="text-[10px] text-gray-400 font-bold">{st.parentPhone}</span>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#f1f5f9] text-[#334155] border border-[#e2e8f0]">
+                                        {st.beltRank || 'Đai Trắng'}
+                                      </span>
                                     </td>
                                     <td className="px-4 py-3 font-extrabold text-[#111827]">{formatVND(st.tuitionFee)}</td>
                                     <td className="px-4 py-3 text-gray-400 font-mono">{formatDateCompact(st.enrollmentDate)}</td>
+                                    <td className="px-4 py-3">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]/60">
+                                        {calculateStudyDurationYears(st.enrollmentDate, st.leaveDate)}
+                                      </span>
+                                    </td>
                                     <td className="px-4 py-3" data-html2canvas-ignore="true">
                                       <div className="flex items-center gap-1.5">
                                         <button
@@ -2811,7 +2843,7 @@ export default function App() {
                                         >
                                           {isExpanded ? 'Thu gọn' : 'Xem thêm'}
                                         </button>
-
+ 
                                         <button
                                           onClick={() => {
                                             setEditingStudent(st);
@@ -2838,8 +2870,16 @@ export default function App() {
                                   
                                   {isExpanded && (
                                     <tr className="bg-emerald-50/15 border-b border-emerald-100/50">
-                                      <td colSpan={6} className="p-4">
+                                      <td colSpan={7} className="p-4">
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Họ tên Phụ huynh</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.parentName || 'Không có'}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">SĐT Phụ huynh</p>
+                                            <p className="font-semibold text-gray-850 mt-0.5">{st.parentPhone || 'Không có'}</p>
+                                          </div>
                                           <div>
                                             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Biệt danh / Nickname</p>
                                             <p className="font-semibold text-gray-850 mt-0.5">{st.nickname || 'Không có'}</p>
@@ -2921,16 +2961,27 @@ export default function App() {
                         </div>
 
                         <form onSubmit={handleSaveStudent} className="p-5 space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Họ và Tên võ sinh</label>
+                            <input
+                              type="text"
+                              name="fullName"
+                              required
+                              placeholder="Ví dụ: Nguyễn Văn Hải"
+                              defaultValue={editingStudent?.fullName || ''}
+                              className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                            />
+                          </div>
+
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-gray-500 uppercase">Họ và Tên võ sinh</label>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Cấp bậc Đai Đẳng</label>
                               <input
                                 type="text"
-                                name="fullName"
-                                required
-                                placeholder="Ví dụ: Nguyễn Văn Hải"
-                                defaultValue={editingStudent?.fullName || ''}
-                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
+                                name="beltRank"
+                                placeholder="Ví dụ: Đai Trắng, Đai Lam, Nhị Đẳng..."
+                                defaultValue={editingStudent?.beltRank || 'Đai Trắng'}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none text-gray-750"
                               />
                             </div>
                             <div className="space-y-1">
@@ -3054,7 +3105,38 @@ export default function App() {
                             ></textarea>
                           </div>
 
-                          <input type="hidden" name="activeStatus" defaultValue={editingStudent?.activeStatus || 'Active'} />
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Trạng thái hồ sơ</label>
+                              <select
+                                name="activeStatus"
+                                defaultValue={editingStudent?.activeStatus || 'Active'}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3 uppercase text-[10px] tracking-wider font-extrabold text-gray-750 focus:border-emerald-500 focus:outline-none"
+                              >
+                                <option value="Active">Đang đi học</option>
+                                <option value="Inactive">Tạm nghỉ học</option>
+                                <option value="Archived">Đã lưu trữ</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày ghi danh học</label>
+                              <input
+                                type="date"
+                                name="enrollmentDate"
+                                defaultValue={editingStudent?.enrollmentDate || new Date().toISOString().substring(0, 10)}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none text-gray-700"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Ngày nghỉ học (nếu có)</label>
+                              <input
+                                type="date"
+                                name="leaveDate"
+                                defaultValue={editingStudent?.leaveDate || ''}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3 text-xs font-semibold focus:border-emerald-500 focus:outline-none text-gray-700"
+                              />
+                            </div>
+                          </div>
 
                           <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
                             <button

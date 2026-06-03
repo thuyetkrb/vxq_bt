@@ -201,7 +201,7 @@ function writeSheetData(sheetName, list) {
 
   var headersMap = {
     "Users": ["username", "fullName", "role", "isActive", "password"],
-    "Students": ["studentId", "fullName", "nickname", "dateOfBirth", "gender", "parentName", "parentPhone", "phone", "address", "email", "classId", "tuitionFee", "discount", "note", "activeStatus", "enrollmentDate", "createdAt", "updatedAt"],
+    "Students": ["studentId", "fullName", "nickname", "beltRank", "dateOfBirth", "gender", "parentName", "parentPhone", "phone", "address", "email", "classId", "tuitionFee", "discount", "note", "activeStatus", "enrollmentDate", "leaveDate", "createdAt", "updatedAt"],
     "TuitionPayments": ["paymentId", "studentId", "classId", "month", "year", "amount", "paidStatus", "paidDate", "collectedBy", "receiptNo", "note", "createdAt", "updatedAt"],
     "BankTransfers": ["transferId", "studentId", "month", "year", "transferDate", "amount", "note", "createdBy", "createdAt"],
     "Announcements": ["announcementId", "type", "title", "content", "createdBy", "createdAt", "updatedAt", "pinned"]
@@ -332,6 +332,7 @@ function writeSheetData(sheetName, list) {
           studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
           fullName: String(s.fullName || ''),
           nickname: s.nickname ? String(s.nickname) : undefined,
+          beltRank: s.beltRank ? String(s.beltRank) : undefined,
           dateOfBirth: String(s.dateOfBirth || ''),
           gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
           parentName: String(s.parentName || ''),
@@ -345,6 +346,7 @@ function writeSheetData(sheetName, list) {
           note: String(s.note || ''),
           activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
           enrollmentDate: String(s.enrollmentDate || ''),
+          leaveDate: s.leaveDate ? String(s.leaveDate) : undefined,
           createdAt: String(s.createdAt || new Date().toISOString()),
           updatedAt: String(s.updatedAt || new Date().toISOString())
         }));
@@ -522,6 +524,7 @@ function writeSheetData(sheetName, list) {
           studentId: String(s.studentId || '').replace(/^STUD-/, 'VS-'),
           fullName: String(s.fullName || ''),
           nickname: s.nickname ? String(s.nickname) : undefined,
+          beltRank: s.beltRank ? String(s.beltRank) : undefined,
           dateOfBirth: String(s.dateOfBirth || ''),
           gender: s.gender === 'Female' || s.gender === 'Nữ' ? 'Female' : 'Male',
           parentName: String(s.parentName || ''),
@@ -535,6 +538,7 @@ function writeSheetData(sheetName, list) {
           note: String(s.note || ''),
           activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
           enrollmentDate: String(s.enrollmentDate || ''),
+          leaveDate: s.leaveDate ? String(s.leaveDate) : undefined,
           createdAt: String(s.createdAt || new Date().toISOString()),
           updatedAt: String(s.updatedAt || new Date().toISOString())
         })) : [];
@@ -1067,7 +1071,7 @@ function writeSheetData(sheetName, list) {
               </div>
               <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
                 <span className="text-[10px] font-extrabold tracking-wider text-gray-400 uppercase">Hóa đơn thu</span>
-                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{payments.length}</p>
+                <p className="text-xl font-extrabold text-[#0f766e] mt-1">{payments.filter(p => p.amount > 0 && p.paidStatus === 'Paid').length}</p>
                 <p className="text-[9px] text-gray-400 font-semibold mt-0.5">Biên lai ghi nhận</p>
               </div>
               <div className="bg-gray-50/65 border border-gray-150 rounded-xl p-3 text-center">
