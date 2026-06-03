@@ -62,6 +62,14 @@ export default function AnnouncementSection({
         ...prev,
         [targetAnnId]: true
       }));
+
+      // Find the target announcement to auto-sync activeSubTab with its type
+      const matched = announcements.find(a => a.announcementId === targetAnnId);
+      if (matched) {
+        const matchedType = matched.type || 'internal';
+        setActiveSubTab(matchedType);
+      }
+
       // Smooth scroll to the direct-linked element
       setTimeout(() => {
         const el = document.getElementById(`ann-card-${targetAnnId}`);
@@ -70,7 +78,7 @@ export default function AnnouncementSection({
         }
       }, 300);
     }
-  }, [targetAnnId]);
+  }, [targetAnnId, announcements]);
 
   // Sychronize activeSubTab with forceType if it changes
   React.useEffect(() => {
@@ -85,6 +93,9 @@ export default function AnnouncementSection({
   // Filter announcements by activeSubTab (missing type defaults to 'internal')
   const filteredAnnouncements = announcements.filter((ann) => {
     const annType = ann.type || 'internal';
+    if (targetAnnId) {
+      return ann.announcementId === targetAnnId;
+    }
     return annType === activeSubTab;
   });
 
@@ -391,6 +402,29 @@ export default function AnnouncementSection({
               </div>
             </form>
           </motion.div>
+        </div>
+      )}
+
+      {targetAnnId && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-emerald-50/70 border border-emerald-100 px-5 py-4 rounded-xl shadow-3xs text-emerald-950">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-bold leading-normal">Bạn đang xem một bài viết/tin tức duy nhất qua liên kết trực tiếp</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onSelectAnnouncement) {
+                onSelectAnnouncement(null);
+              }
+            }}
+            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-950 underline hover:no-underline font-extrabold text-xs cursor-pointer select-none py-0.5"
+          >
+            ← Xem tất cả bài viết & thông báo
+          </button>
         </div>
       )}
 
