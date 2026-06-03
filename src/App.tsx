@@ -534,7 +534,8 @@ export default function App() {
   ) => {
     const getTime = (isoStr: string | undefined) => {
       if (!isoStr) return 0;
-      return new Date(isoStr).getTime();
+      const t = new Date(isoStr).getTime();
+      return isNaN(t) ? 0 : t;
     };
 
     // --- 1. MERGE STUDENTS ---
@@ -579,7 +580,7 @@ export default function App() {
       } else {
         const localTime = Math.max(getTime(s.updatedAt), getTime(s.createdAt));
         const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-        if (localTime > remoteTime) {
+        if (localTime >= remoteTime) {
           mergedStudentsMap.set(s.studentId, s);
         }
       }
@@ -623,7 +624,7 @@ export default function App() {
         } else {
           const localTime = Math.max(getTime(p.updatedAt), getTime(p.createdAt));
           const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-          if (localTime > remoteTime) {
+          if (localTime >= remoteTime) {
             mergedPaymentsMap.set(p.paymentId, p);
           }
         }
@@ -669,7 +670,7 @@ export default function App() {
         } else {
           const localTime = getTime(b.createdAt);
           const remoteTime = getTime(existing.createdAt);
-          if (localTime > remoteTime) {
+          if (localTime >= remoteTime) {
             mergedTransfersMap.set(b.transferId, b);
           }
         }
@@ -714,7 +715,7 @@ export default function App() {
         } else {
           const localTime = Math.max(getTime(a.updatedAt), getTime(a.createdAt));
           const remoteTime = Math.max(getTime(existing.updatedAt), getTime(existing.createdAt));
-          if (localTime > remoteTime) {
+          if (localTime >= remoteTime) {
             mergedAnnouncementsMap.set(a.announcementId, a);
           }
         }
@@ -3244,7 +3245,7 @@ export default function App() {
                             <div className="space-y-1">
                               <label className="text-[10px] font-bold text-gray-500 uppercase">Email cha mẹ báo học tập</label>
                               <input
-                                type="email"
+                                type="text"
                                 name="email"
                                 placeholder="vui_long_nhap_email@gmail.com"
                                 defaultValue={editingStudent?.email || ''}
