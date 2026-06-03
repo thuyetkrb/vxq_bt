@@ -1664,7 +1664,9 @@ export default function App() {
     const finalStatus = isFreeExempt ? 'Exempted' as const : 'Paid' as const;
     const finalAmt = isFreeExempt ? 0 : paidAmt;
 
-    const sequence = payments.filter(p => p.month === currentMonth && p.year === currentYear && p.paidStatus !== 'Unpaid').length + 1;
+    const sequence = payments.filter(
+      p => p.month === currentMonth && p.year === currentYear && p.paidStatus !== 'Unpaid' && students.some(s => s.studentId === p.studentId)
+    ).length + 1;
     const receiptGenerated = isFreeExempt 
       ? `EX-${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`
       : `${config.receiptPrefix}${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}${String(sequence).padStart(3, '0')}`;
@@ -1992,7 +1994,7 @@ export default function App() {
   };
 
   const handleExportTuitionReport = () => {
-    const reportList = payments.filter(p => p.month === currentMonth && p.year === currentYear).map(p => {
+    const reportList = allCurrentPayments.map(p => {
       const std = students.find(s => s.studentId === p.studentId);
       return {
         'Mã Phiếu': p.paymentId,
@@ -2086,7 +2088,9 @@ export default function App() {
   // -------------------------------------------------------------
   // ANALYTICAL METRICS
   // -------------------------------------------------------------
-  const allCurrentPayments = payments.filter(p => p.month === currentMonth && p.year === currentYear);
+  const allCurrentPayments = payments.filter(
+    p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId)
+  );
   const paidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Paid').length;
   const unpaidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').length;
 
@@ -3506,14 +3510,14 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {payments.filter(p => p.month === currentMonth && p.year === currentYear).length === 0 ? (
+                          {allCurrentPayments.length === 0 ? (
                             <tr>
                               <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                                 Chưa có hồ sơ nghĩa vụ học phí khởi tạo cho tháng này.
                               </td>
                             </tr>
                           ) : (
-                            payments.filter(p => p.month === currentMonth && p.year === currentYear).map((pay) => {
+                            allCurrentPayments.map((pay) => {
                               const stud = students.find(s => s.studentId === pay.studentId);
                               
                               return (

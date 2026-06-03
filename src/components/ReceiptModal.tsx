@@ -59,13 +59,13 @@ ${boundary}
                ${isExempt ? 'PHIẾU MIỄN ĐÓNG HỌC PHÍ' : 'BIÊN LAI THU HỌC PHÍ'}
                Số phiếu: ${payment.receiptNo || 'MD2605XXX'}
 ${boundary}
-Họ và tên học sinh: ${student.fullName}
+Tên võ sinh: ${student.fullName}
 Thời gian/Tháng học: ${getMonthName(payment.month)} / năm ${payment.year}
 ${isExempt ? 'Học phí thu: 0 VNĐ (Được miễn học phí hoàn toàn)' : `Học phí thu: ${formatVND(payment.amount)}`}
 Trạng thái đóng: ${isExempt ? 'MIỄN GIẢM / CHƯA CẦN THU' : 'ĐÃ THANH TOÁN'}
 Ngày thu phí: ${payment.paidDate || 'N/A'}
 Đơn vị thu: Võ Quán Nam Anh Quang
-Người thực hiện: ${payment.collectedBy || 'N/A'}
+Người thu: ${payment.collectedBy || 'N/A'}
 Ghi chú/Lý do: ${payment.note || 'Không có'}
 ${boundary}
 Cảm ơn quý phụ huynh và võ sinh đã đồng hành
@@ -138,12 +138,8 @@ ${boundary}`;
             {/* Info Grid */}
             <div className="mt-6 space-y-3 text-sm">
               <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                <span className="text-gray-500">Họ tên học sinh:</span>
+                <span className="text-gray-500">Tên võ sinh:</span>
                 <span className="font-medium text-gray-900">{student.fullName}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                <span className="text-gray-500">Biệt danh / Gọi tên:</span>
-                <span className="text-gray-900">{student.nickname || 'Không có'}</span>
               </div>
               <div className="flex justify-between border-b border-gray-100 pb-1.5">
                 <span className="text-gray-500">Thời gian học phí:</span>
@@ -169,7 +165,7 @@ ${boundary}`;
                 <span className="text-emerald-800 font-extrabold text-[12.5px]">VÕ QUÁN NAM ANH QUANG</span>
               </div>
               <div className="flex justify-between border-b border-gray-100 pb-1.5 align-middle">
-                <span className="text-gray-500">{payment.paidStatus === 'Exempted' ? 'Người phê duyệt miễn học:' : 'Nhân viên thực hiện:'}</span>
+                <span className="text-gray-500">{payment.paidStatus === 'Exempted' ? 'Người phê duyệt miễn học:' : 'Người thu:'}</span>
                 <span className="text-gray-900 font-medium">{payment.collectedBy || 'Người chỉ định'}</span>
               </div>
               <div className="flex flex-col gap-1 border-b border-gray-100 pb-1.5">
