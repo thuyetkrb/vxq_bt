@@ -20,8 +20,8 @@ export const INITIAL_CONFIG: AppConfig = {
   logoUrl: '',
   defaultTuitionFee: 500000, // 500,000 VND
   academicYear: 2026,
-  googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc/exec',
-  googleScriptsId: 'AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc'
+  googleScriptsUrl: 'https://script.google.com/macros/s/AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA/exec',
+  googleScriptsId: 'AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA'
 };
 
 export const INITIAL_CLASSES: any[] = [];

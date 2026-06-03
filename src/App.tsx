@@ -478,12 +478,14 @@ export default function App() {
           parsed.googleScriptsId === 'AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A' ||
           parsed.googleScriptsUrl.includes('AKfycbwm8Kbjky4oFi3F6Xo9iMF3kFjYka_Oht02gUBq1TeAE-7oM2rMvzPW3oJXObFa5_4B7A') ||
           parsed.googleScriptsId === 'AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A' ||
-          parsed.googleScriptsUrl.includes('AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A')
+          parsed.googleScriptsUrl.includes('AKfycbz8qBhbqrXs4hMAsudR9q9qR9vXLtcmQG9rRbJ04GnfTk_DNKLxx_A2VEjxoHSIbUTi4A') ||
+          parsed.googleScriptsId === 'AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc' ||
+          parsed.googleScriptsUrl.includes('AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc')
         ) {
           parsed = {
             ...parsed,
-            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc/exec',
-            googleScriptsId: 'AKfycbxXbqnDWVLl0nk9FaRVAt5C6t2EnDIhxpLGBiFBtvYNHodOIkAs837MUudZYz4_GHc'
+            googleScriptsUrl: 'https://script.google.com/macros/s/AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA/exec',
+            googleScriptsId: 'AKfycby6ND26iAHVhi5NHodZg1ARTCFmasIwxeh123068iZz8crAzOilfxuQRgCOy0SccOuaaA'
           };
           needsSave = true;
         }
