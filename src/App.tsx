@@ -219,20 +219,13 @@ export default function App() {
     if (isSyncingFromUrlRef.current) return;
 
     const slug = activeTab === 'dashboard' ? '' : (TAB_PATH_MAP[activeTab] || activeTab);
-    let targetPath = slug ? `/${slug}` : '/';
-    if (targetAnnId) {
-      targetPath += (slug ? '/' : '') + targetAnnId;
-    }
-
-    const currentSlug = window.location.hash.replace(/^#\/?/, '') || window.location.pathname.replace(/^\//, '');
     const targetSlugWithoutSlash = `${slug}${targetAnnId ? (slug ? '/' : '') + targetAnnId : ''}`;
 
+    const currentSlug = window.location.hash.replace(/^#\/?/, '') || window.location.pathname.replace(/^\//, '');
+
     if (currentSlug !== targetSlugWithoutSlash) {
-      if (window.location.hash.startsWith('#')) {
-        window.history.pushState(null, '', `#/${targetSlugWithoutSlash}`);
-      } else {
-        window.history.pushState(null, '', targetPath);
-      }
+      // Use hash by default to prevent 404 errors on server reloads (e.g., github pages, static hosting)
+      window.history.pushState(null, '', targetSlugWithoutSlash ? `#/${targetSlugWithoutSlash}` : '#/');
     }
   }, [activeTab, targetAnnId]);
 

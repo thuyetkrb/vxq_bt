@@ -175,7 +175,7 @@ export default function AnnouncementSection({
 
   const handleCopyLink = (ann: Announcement) => {
     const prefix = ann.type === 'news' ? 'tin-tuc' : 'noi-bo';
-    const link = `${window.location.origin}/${prefix}/${ann.announcementId}`;
+    const link = `${window.location.origin}/#/${prefix}/${ann.announcementId}`;
     
     if (navigator.clipboard) {
       navigator.clipboard.writeText(link).then(() => {
