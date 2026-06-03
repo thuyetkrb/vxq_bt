@@ -564,8 +564,8 @@ export default function App() {
           note: String(s.note || ''),
           activeStatus: s.activeStatus === 'Inactive' ? 'Inactive' : s.activeStatus === 'Archived' ? 'Archived' : 'Active',
           enrollmentDate: s.enrollmentDate ? normalizeDateToLocalYMD(String(s.enrollmentDate)) : '',
-          createdAt: String(s.createdAt || new Date().toISOString()),
-          updatedAt: String(s.updatedAt || new Date().toISOString())
+          createdAt: String(s.createdAt || '1970-01-01T00:00:00.000Z'),
+          updatedAt: String(s.updatedAt || '1970-01-01T00:00:00.000Z')
         };
       });
     }
@@ -607,8 +607,8 @@ export default function App() {
           collectedBy: p.collectedBy ? String(p.collectedBy) : undefined,
           receiptNo: String(p.receiptNo || ''),
           note: String(p.note || ''),
-          createdAt: String(p.createdAt || new Date().toISOString()),
-          updatedAt: String(p.updatedAt || new Date().toISOString())
+          createdAt: String(p.createdAt || '1970-01-01T00:00:00.000Z'),
+          updatedAt: String(p.updatedAt || '1970-01-01T00:00:00.000Z')
         };
       });
     }
@@ -648,7 +648,7 @@ export default function App() {
           amount: parseFloat(b.amount) || 0,
           note: String(b.note || ''),
           createdBy: String(b.createdBy || ''),
-          createdAt: String(b.createdAt || new Date().toISOString())
+          createdAt: String(b.createdAt || '1970-01-01T00:00:00.000Z')
         };
       });
     }
@@ -691,8 +691,8 @@ export default function App() {
           title: String(a.title || 'Thông báo'),
           content: String(a.content || ''),
           createdBy: String(a.createdBy || ''),
-          createdAt: String(a.createdAt || new Date().toISOString()),
-          updatedAt: String(a.updatedAt || new Date().toISOString()),
+          createdAt: String(a.createdAt || '1970-01-01T00:00:00.000Z'),
+          updatedAt: String(a.updatedAt || '1970-01-01T00:00:00.000Z'),
           pinned: String(a.pinned).toUpperCase() === 'TRUE' || a.pinned === true
         };
       });
@@ -3187,8 +3187,7 @@ export default function App() {
                               <input
                                 type="date"
                                 name="dateOfBirth"
-                                required
-                                defaultValue={editingStudent?.dateOfBirth || '2015-01-01'}
+                                defaultValue={editingStudent?.dateOfBirth || ''}
                                 className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-1.5 px-3.5 text-xs font-semibold focus:border-emerald-500 focus:outline-none"
                               />
                             </div>
