@@ -330,6 +330,11 @@ export default function App() {
   const isSyncingRef = useRef<boolean>(false);
   const lastActivePushRef = useRef<string>('');
 
+  // Tracking sets for unsynced local changes to prevent fetch-back overwrite before push completes
+  const unsyncedStudentIdsRef = useRef<Set<string>>(new Set());
+  const unsyncedPaymentIdsRef = useRef<Set<string>>(new Set());
+  const unsyncedTransferIdsRef = useRef<Set<string>>(new Set());
+
   const studentsStateRef = useRef<Student[]>([]);
   studentsStateRef.current = students;
   const paymentsStateRef = useRef<TuitionPayment[]>([]);
@@ -715,7 +720,7 @@ export default function App() {
       if (!existing) {
         mergedStudentsMap.set(s.studentId, s);
       } else {
-        if (isLocalNewer(s.updatedAt, s.createdAt, existing.updatedAt, existing.createdAt)) {
+        if (unsyncedStudentIdsRef.current.has(s.studentId) || isLocalNewer(s.updatedAt, s.createdAt, existing.updatedAt, existing.createdAt)) {
           mergedStudentsMap.set(s.studentId, s);
         }
       }
@@ -757,7 +762,7 @@ export default function App() {
         if (!existing) {
           mergedPaymentsMap.set(p.paymentId, p);
         } else {
-          if (isLocalNewer(p.updatedAt, p.createdAt, existing.updatedAt, existing.createdAt)) {
+          if (unsyncedPaymentIdsRef.current.has(p.paymentId) || isLocalNewer(p.updatedAt, p.createdAt, existing.updatedAt, existing.createdAt)) {
             mergedPaymentsMap.set(p.paymentId, p);
           }
         }
@@ -807,7 +812,7 @@ export default function App() {
         if (!existing) {
           mergedTransfersMap.set(b.transferId, b);
         } else {
-          if (isLocalNewer(undefined, b.createdAt, undefined, existing.createdAt)) {
+          if (unsyncedTransferIdsRef.current.has(b.transferId) || isLocalNewer(undefined, b.createdAt, undefined, existing.createdAt)) {
             mergedTransfersMap.set(b.transferId, b);
           }
         }
@@ -1154,6 +1159,12 @@ export default function App() {
                 announcements: merged.announcements,
                 history: merged.history
               });
+
+              // Clear the unsynced tracking sets upon successful database push
+              unsyncedStudentIdsRef.current.clear();
+              unsyncedPaymentIdsRef.current.clear();
+              unsyncedTransferIdsRef.current.clear();
+
               setTimeout(() => {
                 setIsPushingState(prev => prev === 'success' ? 'idle' : prev);
               }, 2500);
@@ -1588,6 +1599,7 @@ export default function App() {
 
     if (editingStudent) {
       // Edit student
+      unsyncedStudentIdsRef.current.add(editingStudent.studentId);
       const oldValStr = JSON.stringify(editingStudent);
       const updated = students.map(s => 
         s.studentId === editingStudent.studentId
@@ -1622,6 +1634,7 @@ export default function App() {
     } else {
       // Create student
       const newId = `VS-${String(students.length + 1).padStart(3, '0')}`;
+      unsyncedStudentIdsRef.current.add(newId);
       const freshStud: Student = {
         studentId: newId,
         fullName: fullNameVal,
@@ -1657,6 +1670,7 @@ export default function App() {
 
   const handleArchiveStudent = (stud: Student) => {
     if (currentUser.role === 'VIEWER') return;
+    unsyncedStudentIdsRef.current.add(stud.studentId);
     const oldSum = JSON.stringify(stud);
     const updated = students.map(s => 
       s.studentId === stud.studentId 
@@ -1706,6 +1720,8 @@ export default function App() {
     let updated;
     const existingIndex = payments.findIndex(p => p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear);
     if (existingIndex >= 0) {
+      const pid = payments[existingIndex].paymentId;
+      if (pid) unsyncedPaymentIdsRef.current.add(pid);
       updated = payments.map(p => {
         if (p.studentId === payingStudentId && p.month === currentMonth && p.year === currentYear) {
           return {
@@ -1722,8 +1738,10 @@ export default function App() {
         return p;
       });
     } else {
+      const newPayId = `PAY-${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      unsyncedPaymentIdsRef.current.add(newPayId);
       const newBill: TuitionPayment = {
-        paymentId: `PAY-${String(currentYear).substring(2)}${String(currentMonth).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentId: newPayId,
         studentId: payingStudentId!,
         classId: matchStudent?.classId || 'CLASS-01',
         month: currentMonth,
@@ -1775,6 +1793,7 @@ export default function App() {
     }
 
     if (confirm('Bạn có hoàn tất hủy xác nhận đóng học phí này? Trạng thái sẽ trở về UNPAID.')) {
+      if (pay.paymentId) unsyncedPaymentIdsRef.current.add(pay.paymentId);
       const oldSum = JSON.stringify(pay);
       const updated = payments.map(p => 
         p.paymentId === pay.paymentId 
@@ -1852,6 +1871,7 @@ export default function App() {
 
   const handleAddBankTransfer = (newTransfer: Omit<BankTransfer, 'transferId' | 'createdAt'>) => {
     const trfId = `BT-${Date.now().toString().substring(8)}`;
+    unsyncedTransferIdsRef.current.add(trfId);
     const fullTrf: BankTransfer = {
       ...newTransfer,
       transferId: trfId,
@@ -1865,6 +1885,7 @@ export default function App() {
   };
 
   const handleUpdateBankTransfer = (updatedTrf: BankTransfer) => {
+    unsyncedTransferIdsRef.current.add(updatedTrf.transferId);
     const oldVal = JSON.stringify(bankTransfers.find(t => t.transferId === updatedTrf.transferId) || '');
     const updated = bankTransfers.map(t => t.transferId === updatedTrf.transferId ? updatedTrf : t);
     setBankTransfers(updated);
@@ -1874,6 +1895,7 @@ export default function App() {
   };
 
   const handleDeleteBankTransfer = (trfId: string) => {
+    unsyncedTransferIdsRef.current.add(trfId);
     const oldVal = JSON.stringify(bankTransfers.find(t => t.transferId === trfId) || '');
     const updated = bankTransfers.filter(t => t.transferId !== trfId);
     setBankTransfers(updated);
@@ -3491,13 +3513,13 @@ export default function App() {
                               }}
                               className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
                             >
-                              Hủy bỏ tuyển sinh
+                              {editingStudent ? 'Hủy thay đổi' : 'Hủy bỏ tuyển sinh'}
                             </button>
                             <button
                               type="submit"
                               className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
                             >
-                              Hoàn thành đăng ký
+                              {editingStudent ? 'Cập nhật hồ sơ' : 'Hoàn thành đăng ký'}
                             </button>
                           </div>
                         </form>
