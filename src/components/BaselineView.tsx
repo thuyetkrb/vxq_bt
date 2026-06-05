@@ -43,11 +43,14 @@ export default function BaselineView({
 
   // Compute stats for selected period
   const activeStudentsCount = students.filter(s => s.activeStatus === 'Active').length;
-  const collectedPayments = payments.filter(p => p.month === selectedMonth && p.year === selectedYear && p.paidStatus === 'Paid');
-  const unpaidPayments = payments.filter(p => p.month === selectedMonth && p.year === selectedYear && p.paidStatus === 'Unpaid');
+  const collectedPayments = payments.filter(p => p.month === selectedMonth && p.year === selectedYear && p.paidStatus === 'Paid' && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active'));
+  const unpaidPayments = payments.filter(p => p.month === selectedMonth && p.year === selectedYear && p.paidStatus === 'Unpaid' && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active'));
   
   const totalCollectedAmount = collectedPayments.reduce((sum, p) => sum + p.amount, 0);
-  const totalUnpaidAmount = unpaidPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalUnpaidAmount = unpaidPayments.reduce((sum, p) => {
+    const s = students.find(stud => stud.studentId === p.studentId);
+    return sum + (s ? s.tuitionFee : p.amount);
+  }, 0);
 
   const monthTransfers = transfers.filter(t => t.month === selectedMonth && t.year === selectedYear);
   const totalTransferredAmount = monthTransfers.reduce((sum, t) => sum + t.transferAmount, 0);
@@ -250,7 +253,7 @@ export default function BaselineView({
                               <tr key={p.paymentId} className="border-b">
                                 <td className="py-2">{p.studentId}</td>
                                 <td className="py-2 font-medium">{stud?.fullName || 'Học viên ẩn'}</td>
-                                <td className="py-2 text-right">{formatVND(p.amount)}</td>
+                                <td className="py-2 text-right">{formatVND(stud ? stud.tuitionFee : p.amount)}</td>
                               </tr>
                             );
                           })
@@ -295,7 +298,7 @@ export default function BaselineView({
                           <p className="text-[10px] text-gray-400">SĐT: {stud?.parentPhone || 'Chưa cung cấp'}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-bold text-red-700">{formatVND(pay.amount)}</p>
+                          <p className="text-xs font-bold text-red-700">{formatVND(stud ? stud.tuitionFee : pay.amount)}</p>
                           <span className="text-[9px] px-1 bg-red-100/70 text-red-800 rounded font-semibold">Chờ đóng</span>
                         </div>
                       </div>

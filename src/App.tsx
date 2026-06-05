@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   LayoutDashboard,
   GraduationCap,
@@ -312,6 +312,13 @@ export default function App() {
   const [payments, setPayments] = useState<TuitionPayment[]>([]);
   const [transfers, setTransfers] = useState<TeacherTransfer[]>([]);
   const [bankTransfers, setBankTransfers] = useState<BankTransfer[]>([]);
+  const cleanBankTransfers = useMemo(() => {
+    return bankTransfers.filter(t => {
+      if (!t) return false;
+      const amount = parseFloat(t.amount as any) || 0;
+      return amount > 0;
+    });
+  }, [bankTransfers]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [config, setConfig] = useState<AppConfig>(INITIAL_CONFIG);
   const [history, setHistory] = useState<HistoryRecord[]>(() => {
@@ -467,9 +474,13 @@ export default function App() {
               let parsedBT = JSON.parse(lcBankTransfers);
               parsedBT = parsedBT.map((b: any) => {
                 if (b.studentId && b.studentId.startsWith('STUD-')) {
-                  return { ...b, studentId: b.studentId.replace('STUD-', 'VS-') };
+                   return { ...b, studentId: b.studentId.replace('STUD-', 'VS-') };
                 }
                 return b;
+              }).filter((t: any) => {
+                if (!t) return false;
+                const amount = parseFloat(t.amount) || 0;
+                return amount > 0;
               });
               localStorage.setItem('mec_bank_transfers', JSON.stringify(parsedBT));
             } catch (e) {}
@@ -509,7 +520,18 @@ export default function App() {
       const lcBankTransfers = localStorage.getItem('mec_bank_transfers');
       if (lcBankTransfers) {
         try {
-          setBankTransfers(JSON.parse(lcBankTransfers));
+          const parsed = JSON.parse(lcBankTransfers);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((t: any) => {
+              if (!t) return false;
+              const amount = parseFloat(t.amount) || 0;
+              return amount > 0;
+            });
+            setBankTransfers(filtered);
+            localStorage.setItem('mec_bank_transfers', JSON.stringify(filtered));
+          } else {
+            setBankTransfers(INITIAL_BANK_TRANSFERS);
+          }
         } catch (e) {
           setBankTransfers(INITIAL_BANK_TRANSFERS);
         }
@@ -746,23 +768,29 @@ export default function App() {
     // --- 3. MERGE BANK TRANSFERS ---
     let parsedRemoteTransfers: BankTransfer[] = [];
     if (remoteData.bankTransfers && Array.isArray(remoteData.bankTransfers)) {
-      parsedRemoteTransfers = remoteData.bankTransfers.filter((b: any) => b).map((b: any, idx: number) => {
-        let id = String(b.transferId || '').trim();
-        if (!id) {
-          id = `TFR-GHS-${idx + 1}-${b.studentId || 'unknown'}-${Math.floor(1000 + Math.random() * 9000)}`;
-        }
-        return {
-          transferId: id,
-          studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
-          month: parseInt(b.month) || new Date().getMonth() + 1,
-          year: parseInt(b.year) || new Date().getFullYear(),
-          transferDate: b.transferDate ? normalizeDateToLocalYMD(String(b.transferDate)) : '',
-          amount: parseFloat(b.amount) || 0,
-          note: String(b.note || ''),
-          createdBy: String(b.createdBy || ''),
-          createdAt: String(b.createdAt || '1970-01-01T00:00:00.000Z')
-        };
-      });
+      parsedRemoteTransfers = remoteData.bankTransfers
+        .filter((b: any) => {
+          if (!b) return false;
+          const amount = parseFloat(b.amount) || 0;
+          return amount > 0;
+        })
+        .map((b: any, idx: number) => {
+          let id = String(b.transferId || '').trim();
+          if (!id) {
+            id = `TFR-GHS-${idx + 1}-${b.studentId || 'unknown'}-${Math.floor(1000 + Math.random() * 9000)}`;
+          }
+          return {
+            transferId: id,
+            studentId: b.studentId ? String(b.studentId).replace(/^STUD-/, 'VS-') : undefined,
+            month: parseInt(b.month) || new Date().getMonth() + 1,
+            year: parseInt(b.year) || new Date().getFullYear(),
+            transferDate: b.transferDate ? normalizeDateToLocalYMD(String(b.transferDate)) : '',
+            amount: parseFloat(b.amount) || 0,
+            note: String(b.note || ''),
+            createdBy: String(b.createdBy || ''),
+            createdAt: String(b.createdAt || '1970-01-01T00:00:00.000Z')
+          };
+        });
     }
 
     const mergedTransfersMap = new Map<string, BankTransfer>();
@@ -910,7 +938,7 @@ export default function App() {
     const checkGoogleDb = async (isInitialLoad: boolean = false) => {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout trigger
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout trigger
 
         const resp = await fetch(`${config.googleScriptsUrl}?action=fetch`, {
           method: 'GET',
@@ -979,8 +1007,8 @@ export default function App() {
         if (isMounted) {
           setDbHealth('error');
           let customMsg = err.message || '';
-          if (err.name === 'AbortError') {
-            customMsg = 'Thời gian kết nối quá hạn (Hơn 8 giây). Script của bạn không phản hồi hoặc URL cấu hình bị sai.';
+          if (err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('abort'))) {
+            customMsg = 'Thời gian kết nối quá hạn (Hơn 30 giây). Script của bạn không phản hồi hoặc URL cấu hình bị sai.';
           } else if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch'))) {
             customMsg = 'Lỗi mạng hoặc chặn CORS. Hãy chắc chắn rằng bạn đã đặt "Anyone" (Bất kỳ ai) và URL đúng định dạng "/exec".';
           }
@@ -1036,7 +1064,7 @@ export default function App() {
         try {
           // 1. PULL LATEST DB STATE TO CO-PARENT A MERGE
           const controller = new AbortController();
-          const fetchTimeoutId = setTimeout(() => controller.abort(), 8000);
+          const fetchTimeoutId = setTimeout(() => controller.abort(), 30000);
 
           const respFetch = await fetch(`${config.googleScriptsUrl}?action=fetch`, {
             method: 'GET',
@@ -1138,7 +1166,11 @@ export default function App() {
         } catch (err: any) {
           console.error('[Sync Error]', err);
           setIsPushingState('error');
-          setPushErrorMessage(err.message || 'Không thể đồng bộ tự động');
+          let customMsg = err.message || '';
+          if (err.name === 'AbortError' || (err.message && err.message.toLowerCase().includes('abort'))) {
+            customMsg = 'Thời gian đồng bộ quá hạn (Hơn 30 giây). Hãy kiểm tra kết nối mạng hoặc thử lại.';
+          }
+          setPushErrorMessage(customMsg || err.message || 'Không thể đồng bộ tự động');
         } finally {
           isSyncingRef.current = false;
         }
@@ -2089,16 +2121,19 @@ export default function App() {
   // ANALYTICAL METRICS
   // -------------------------------------------------------------
   const allCurrentPayments = payments.filter(
-    p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId)
+    p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active')
   );
   const paidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Paid').length;
   const unpaidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').length;
 
   const currentCollectedAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
-  const currentUnpaidAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').reduce((sum, p) => sum + p.amount, 0);
+  const currentUnpaidAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').reduce((sum, p) => {
+    const s = students.find(stud => stud.studentId === p.studentId);
+    return sum + (s ? s.tuitionFee : p.amount);
+  }, 0);
 
   // Bank transfer metrics
-  const currentBankTransferSum = bankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).reduce((sum, t) => sum + t.amount, 0);
+  const currentBankTransferSum = cleanBankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).reduce((sum, t) => sum + t.amount, 0);
   const currentMonthTotalTuition = currentCollectedAmountSum + currentUnpaidAmountSum;
   const currentMonthRemaining = currentMonthTotalTuition - currentBankTransferSum;
 
@@ -2570,7 +2605,7 @@ export default function App() {
                               <div>
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider font-sans font-sans font-sans">Đã chuyển tháng {currentMonth}</p>
                                 <h3 className="text-sm font-black text-sky-850 mt-0.5">{formatVND(currentBankTransferSum)}</h3>
-                                <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans">CK Thầy ( {bankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).length} lần )</p>
+                                <p className="text-[8.5px] text-sky-650 font-bold mt-0.5 font-sans">CK Thầy ( {cleanBankTransfers.filter(t => t.month === currentMonth && t.year === currentYear).length} lần )</p>
                               </div>
                               <div className="h-8 w-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
                                 <Landmark className="h-4 w-4" />
@@ -2921,7 +2956,7 @@ export default function App() {
                                     const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                     const isCellExempt = cellPay?.paidStatus === 'Exempted';
                                     if (isCellExempt) return sum;
-                                    const amt = cellPay ? cellPay.amount : st.tuitionFee;
+                                    const amt = (cellPay && cellPay.paidStatus === 'Paid') ? cellPay.amount : st.tuitionFee;
                                     return sum + amt;
                                   }, 0);
 
@@ -2939,7 +2974,7 @@ export default function App() {
                                   Đã chuyển khoản
                                 </td>
                                 {computedRange.map(item => {
-                                  const colBankTransferSum = bankTransfers
+                                  const colBankTransferSum = cleanBankTransfers
                                     .filter(t => t.month === item.month && t.year === item.year)
                                     .reduce((sum, t) => sum + t.amount, 0);
 
@@ -2962,11 +2997,11 @@ export default function App() {
                                     const cellPay = payments.find(p => p.studentId === st.studentId && p.month === item.month && p.year === item.year);
                                     const isCellExempt = cellPay?.paidStatus === 'Exempted';
                                     if (isCellExempt) return sum;
-                                    const amt = cellPay ? cellPay.amount : st.tuitionFee;
+                                    const amt = (cellPay && cellPay.paidStatus === 'Paid') ? cellPay.amount : st.tuitionFee;
                                     return sum + amt;
                                   }, 0);
 
-                                  const colBankTransferSum = bankTransfers
+                                  const colBankTransferSum = cleanBankTransfers
                                     .filter(t => t.month === item.month && t.year === item.year)
                                     .reduce((sum, t) => sum + t.amount, 0);
 
@@ -3531,7 +3566,9 @@ export default function App() {
                                     <p className="text-gray-700 font-semibold">{stud ? stud.parentName : 'Không có'}</p>
                                     <span className="text-[10px] text-gray-400 font-bold">{stud ? stud.parentPhone : 'N/A'}</span>
                                   </td>
-                                  <td className="px-4 py-3.5 font-extrabold text-emerald-900">{formatVND(pay.amount)}</td>
+                                  <td className="px-4 py-3.5 font-extrabold text-[#111827]">
+                                    {formatVND(pay.paidStatus === 'Paid' ? pay.amount : (stud ? stud.tuitionFee : pay.amount))}
+                                  </td>
                                   <td className="px-4 py-3.5">
                                     {pay.paidStatus === 'Paid' ? (
                                       <div>
@@ -3839,7 +3876,7 @@ export default function App() {
                   ============================================================== */}
               {activeTab === 'bank_transfers' && (
                 <BankTransferView
-                  transfers={bankTransfers}
+                  transfers={cleanBankTransfers}
                   userRole={currentUser.role}
                   currentUserName={currentUser.fullName}
                   onAddTransfer={handleAddBankTransfer}
@@ -3862,7 +3899,7 @@ export default function App() {
                   onUpdateUsers={handleUpdateUsers}
                   students={students}
                   payments={payments}
-                  bankTransfers={bankTransfers}
+                  bankTransfers={cleanBankTransfers}
                   announcements={announcements}
                   onSyncImport={handleSyncImport}
                 />
