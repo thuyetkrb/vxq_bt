@@ -108,6 +108,37 @@ const getMonthRange = (currentM: number, currentY: number, beforeCount: number, 
   return range;
 };
 
+const deduplicatePaymentsList = (lst: TuitionPayment[]): TuitionPayment[] => {
+  if (!Array.isArray(lst)) return [];
+  const map = new Map<string, TuitionPayment>();
+  lst.forEach(p => {
+    if (!p || !p.studentId || !p.month || !p.year) return;
+    const cleanStudentId = String(p.studentId).trim();
+    if (!cleanStudentId) return;
+    const key = `${cleanStudentId}_${p.month}_${p.year}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, p);
+    } else {
+      const statusRank = (status: string) => {
+        if (status === 'Paid') return 3;
+        if (status === 'Exempted') return 2;
+        return 1;
+      };
+      if (statusRank(p.paidStatus) > statusRank(existing.paidStatus)) {
+        map.set(key, p);
+      } else if (statusRank(p.paidStatus) === statusRank(existing.paidStatus)) {
+        const tExisting = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        const tNew = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+        if (tNew > tExisting) {
+          map.set(key, p);
+        }
+      }
+    }
+  });
+  return Array.from(map.values());
+};
+
 const formatDateCompact = (dateStr?: string) => {
   if (!dateStr) return '';
   const cleanDate = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
@@ -512,7 +543,12 @@ export default function App() {
       const lcPayments = localStorage.getItem('mec_payments');
       if (lcPayments) {
         try {
-          setPayments(JSON.parse(lcPayments));
+          const loaded = JSON.parse(lcPayments);
+          const cleaned = deduplicatePaymentsList(loaded);
+          setPayments(cleaned);
+          if (loaded.length !== cleaned.length) {
+            localStorage.setItem('mec_payments', JSON.stringify(cleaned));
+          }
         } catch (e) {
           setPayments(INITIAL_PAYMENTS);
         }
@@ -755,15 +791,42 @@ export default function App() {
     }
 
     const mergedPaymentsMap = new Map<string, TuitionPayment>();
-    parsedRemotePayments.forEach(p => mergedPaymentsMap.set(p.paymentId, p));
+    const cleanRemotePayments = deduplicatePaymentsList(parsedRemotePayments);
+    cleanRemotePayments.forEach(p => {
+      const cleanStudentId = String(p.studentId || '').trim();
+      if (cleanStudentId && p.month && p.year) {
+        const key = `${cleanStudentId}_${p.month}_${p.year}`;
+        mergedPaymentsMap.set(key, p);
+      }
+    });
+
     localPayments.forEach(p => {
-      if (p.paymentId) {
-        const existing = mergedPaymentsMap.get(p.paymentId);
+      if (p.studentId && p.month && p.year) {
+        const cleanStudentId = String(p.studentId).trim();
+        const key = `${cleanStudentId}_${p.month}_${p.year}`;
+        const existing = mergedPaymentsMap.get(key);
         if (!existing) {
-          mergedPaymentsMap.set(p.paymentId, p);
+          mergedPaymentsMap.set(key, p);
         } else {
-          if (unsyncedPaymentIdsRef.current.has(p.paymentId) || isLocalNewer(p.updatedAt, p.createdAt, existing.updatedAt, existing.createdAt)) {
-            mergedPaymentsMap.set(p.paymentId, p);
+          const statusRank = (status: string) => {
+            if (status === 'Paid') return 3;
+            if (status === 'Exempted') return 2;
+            return 1;
+          };
+          const isUnsynced = p.paymentId ? unsyncedPaymentIdsRef.current.has(p.paymentId) : false;
+          
+          if (statusRank(p.paidStatus) > statusRank(existing.paidStatus)) {
+            mergedPaymentsMap.set(key, {
+              ...p,
+              paymentId: existing.paymentId || p.paymentId
+            });
+          } else if (statusRank(p.paidStatus) === statusRank(existing.paidStatus)) {
+            if (isUnsynced || isLocalNewer(p.updatedAt, p.createdAt, existing.updatedAt, existing.createdAt)) {
+              mergedPaymentsMap.set(key, {
+                ...p,
+                paymentId: existing.paymentId || p.paymentId
+              });
+            }
           }
         }
       }
@@ -1460,9 +1523,10 @@ export default function App() {
       }
     });
 
-    if (hasCreatedAnyBill) {
-      setPayments(freshPayments);
-      updateLocalStorage('mec_payments', freshPayments);
+    const uniquePayments = deduplicatePaymentsList(freshPayments);
+    if (hasCreatedAnyBill || uniquePayments.length !== payments.length) {
+      setPayments(uniquePayments);
+      updateLocalStorage('mec_payments', uniquePayments);
     }
   }, [students, payments, currentMonth, currentYear]);
 
@@ -2142,16 +2206,45 @@ export default function App() {
   // -------------------------------------------------------------
   // ANALYTICAL METRICS
   // -------------------------------------------------------------
-  const allCurrentPayments = payments.filter(
-    p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active')
+  const allCurrentPayments = deduplicatePaymentsList(
+    payments.filter(
+      p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active')
+    )
   );
-  const paidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Paid').length;
-  const unpaidCurrentCount = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').length;
 
-  const currentCollectedAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Paid').reduce((sum, p) => sum + p.amount, 0);
-  const currentUnpaidAmountSum = allCurrentPayments.filter(p => p.paidStatus === 'Unpaid').reduce((sum, p) => {
-    const s = students.find(stud => stud.studentId === p.studentId);
-    return sum + (s ? s.tuitionFee : p.amount);
+  const exemptAndFreeStudents = students.filter(s => {
+    if (s.activeStatus !== 'Active') return false;
+    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+    if (curPay && curPay.paidStatus === 'Exempted') return true;
+    if (s.tuitionFee <= 0) return true;
+    return false;
+  });
+  const exemptAndFreeCount = exemptAndFreeStudents.length;
+
+  const paidStudents = students.filter(s => {
+    if (s.activeStatus !== 'Active') return false;
+    if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
+    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+    return curPay && curPay.paidStatus === 'Paid';
+  });
+  const paidCurrentCount = paidStudents.length;
+
+  const unpaidStudents = students.filter(s => {
+    if (s.activeStatus !== 'Active') return false;
+    if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
+    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+    return !curPay || curPay.paidStatus === 'Unpaid';
+  });
+  const unpaidCurrentCount = unpaidStudents.length;
+
+  const currentCollectedAmountSum = paidStudents.reduce((sum, s) => {
+    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+    return sum + (curPay ? curPay.amount : 0);
+  }, 0);
+
+  const currentUnpaidAmountSum = unpaidStudents.reduce((sum, s) => {
+    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
+    return sum + (curPay ? curPay.amount : s.tuitionFee);
   }, 0);
 
   // Bank transfer metrics
@@ -2520,28 +2613,6 @@ export default function App() {
                   ============================================================== */}
               {activeTab === 'dashboard' && (() => {
                 const isAdminOrSuperAdmin = isLoggedIn && (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN');
-                const exemptAndFreeStudents = students.filter(s => {
-                  if (s.activeStatus !== 'Active') return false;
-                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
-                  if (curPay && curPay.paidStatus === 'Exempted') return true;
-                  if (s.tuitionFee <= 0) return true;
-                  return false;
-                });
-                const exemptAndFreeCount = exemptAndFreeStudents.length;
-
-                const paidStudents = students.filter(s => {
-                  if (s.activeStatus !== 'Active') return false;
-                  if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
-                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
-                  return curPay && curPay.paidStatus === 'Paid';
-                });
-
-                const unpaidStudents = students.filter(s => {
-                  if (s.activeStatus !== 'Active') return false;
-                  if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
-                  const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
-                  return !curPay || curPay.paidStatus === 'Unpaid';
-                });
                 return (
                   <div id="dashboard-container" className="space-y-6">
                     {/* Title and Top Description */}
