@@ -2208,12 +2208,12 @@ export default function App() {
   // -------------------------------------------------------------
   const allCurrentPayments = deduplicatePaymentsList(
     payments.filter(
-      p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId && s.activeStatus === 'Active')
+      p => p.month === currentMonth && p.year === currentYear && students.some(s => s.studentId === p.studentId && getStudentStatusInMonth(s, currentMonth, currentYear) === 'Active')
     )
   );
 
   const exemptAndFreeStudents = students.filter(s => {
-    if (s.activeStatus !== 'Active') return false;
+    if (getStudentStatusInMonth(s, currentMonth, currentYear) !== 'Active') return false;
     const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
     if (curPay && curPay.paidStatus === 'Exempted') return true;
     if (s.tuitionFee <= 0) return true;
@@ -2222,7 +2222,7 @@ export default function App() {
   const exemptAndFreeCount = exemptAndFreeStudents.length;
 
   const paidStudents = students.filter(s => {
-    if (s.activeStatus !== 'Active') return false;
+    if (getStudentStatusInMonth(s, currentMonth, currentYear) !== 'Active') return false;
     if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
     const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
     return curPay && curPay.paidStatus === 'Paid';
@@ -2230,7 +2230,7 @@ export default function App() {
   const paidCurrentCount = paidStudents.length;
 
   const unpaidStudents = students.filter(s => {
-    if (s.activeStatus !== 'Active') return false;
+    if (getStudentStatusInMonth(s, currentMonth, currentYear) !== 'Active') return false;
     if (exemptAndFreeStudents.some(ex => ex.studentId === s.studentId)) return false;
     const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
     return !curPay || curPay.paidStatus === 'Unpaid';
@@ -2243,8 +2243,7 @@ export default function App() {
   }, 0);
 
   const currentUnpaidAmountSum = unpaidStudents.reduce((sum, s) => {
-    const curPay = allCurrentPayments.find(p => p.studentId === s.studentId);
-    return sum + (curPay ? curPay.amount : s.tuitionFee);
+    return sum + s.tuitionFee;
   }, 0);
 
   // Bank transfer metrics
